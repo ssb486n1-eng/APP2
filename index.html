@@ -1,12 +1,9 @@
-중복 반복 문제를 근본적으로 해결한 수정판입니다. 핵심은 **① 직전 처리 문장 중복 차단 ② 시간 기반 동일 텍스트 필터 ③ 재시작 세션 간 결과 격리** 3가지 방어막을 추가했습니다.
-
-<artifact identifier="artifact_1785502209188_z8b8ehq" title="실시간 통역 PWA (중복 반복 수정판)" type="text/html">
 <!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>실시간 통역 PWA (중복 반복 수정판)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>실시간 통역 PWA (하단버튼 화면잘림 수정)</title>
 <meta name="theme-color" content="#0d1117">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -19,14 +16,24 @@
     --bg:#0d1117; --panel:#161b22; --panel2:#1c2333; --line:#2d333b;
     --accent:#2f81f7; --accent2:#238636; --danger:#da3633; --warn:#d29922;
     --txt:#e6edf3; --sub:#8b949e;
+    --vh: 1vh; /* JS가 실제 보이는 높이로 보정 */
   }
-  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
+  html,body{margin:0;background:var(--bg);color:var(--txt);
     font-family:-apple-system,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;}
-  body{display:flex;flex-direction:column;overflow:hidden;}
 
-  header{padding:10px 12px;background:var(--panel);border-bottom:1px solid var(--line);
-    display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
-  header h1{font-size:15px;margin:0;font-weight:700;flex:1;min-width:120px;}
+  /* ★★★ 핵심 수정: 100dvh + JS 보정 --vh 로 실제 보이는 높이 사용 ★★★ */
+  body{
+    display:flex;flex-direction:column;overflow:hidden;
+    height:100vh;                          /* 폴백 */
+    height:calc(var(--vh, 1vh) * 100);     /* 구형 대비 JS 보정 */
+    height:100dvh;                         /* 최신: 주소창 제외 동적 높이 */
+    min-height:0;
+  }
+
+  header{padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:none;
+    padding-top:calc(8px + env(safe-area-inset-top));}
+  header h1{font-size:14px;margin:0;font-weight:700;flex:1;min-width:110px;}
   .badge{font-size:11px;color:var(--sub);border:1px solid var(--line);
     padding:2px 6px;border-radius:20px;}
   .badge.eng{color:var(--accent);border-color:var(--accent);cursor:pointer;}
@@ -34,15 +41,17 @@
   .dot.on{background:var(--accent2);box-shadow:0 0 8px var(--accent2);animation:pulse 1.4s infinite;}
   @keyframes pulse{50%{opacity:.4;}}
 
-  .langbar{display:flex;gap:6px;padding:10px 12px;background:var(--panel2);
-    border-bottom:1px solid var(--line);align-items:center;flex-wrap:wrap;}
+  .langbar{display:flex;gap:6px;padding:8px 12px;background:var(--panel2);
+    border-bottom:1px solid var(--line);align-items:center;flex-wrap:wrap;flex:none;}
   .langbar label{font-size:11px;color:var(--sub);}
   select{background:var(--panel);color:var(--txt);border:1px solid var(--line);
     border-radius:8px;padding:8px 10px;font-size:14px;flex:1;min-width:90px;}
   .swap{background:var(--panel);border:1px solid var(--line);color:var(--accent);
     border-radius:8px;width:42px;height:40px;font-size:18px;flex:none;}
 
-  #log{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;}
+  /* 로그 영역이 남는 공간을 모두 차지하되 스크롤 */
+  #log{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    padding:12px;display:flex;flex-direction:column;gap:10px;}
   .msg{border-radius:14px;padding:10px 12px;max-width:92%;line-height:1.45;
     animation:fade .25s ease;word-break:break-word;}
   @keyframes fade{from{opacity:0;transform:translateY(6px);}}
@@ -61,19 +70,21 @@
 
   .empty{color:var(--sub);text-align:center;margin:auto;font-size:14px;line-height:1.7;}
 
-  footer{background:var(--panel);border-top:1px solid var(--line);padding:10px 12px;
-    padding-bottom:calc(10px + env(safe-area-inset-bottom));}
+  /* ★ 하단 푸터: 항상 화면 안에 고정, safe-area 반영 */
+  footer{background:var(--panel);border-top:1px solid var(--line);padding:8px 12px;flex:none;
+    padding-bottom:calc(8px + env(safe-area-inset-bottom));}
   .row{display:flex;gap:8px;align-items:center;}
-  .mic{flex:1;height:58px;border:none;border-radius:14px;font-size:17px;font-weight:700;
+  .mic{flex:1;height:54px;border:none;border-radius:14px;font-size:16px;font-weight:700;
     color:#fff;background:var(--accent2);transition:.15s;}
   .mic.rec{background:var(--danger);animation:rec 1.2s infinite;}
   @keyframes rec{50%{box-shadow:0 0 0 8px rgba(218,54,51,.25);}}
   .mic:disabled{opacity:.5;}
-  .iconbtn{width:52px;height:58px;border:1px solid var(--line);background:var(--panel2);
+  .iconbtn{width:50px;height:54px;border:1px solid var(--line);background:var(--panel2);
     color:var(--txt);border-radius:14px;font-size:20px;}
-  .toolrow{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;}
-  .tool{flex:1;min-width:58px;background:var(--panel2);border:1px solid var(--line);
-    color:var(--txt);border-radius:10px;padding:9px 3px;font-size:11px;}
+  /* 툴바를 그리드 3열 2행으로 → 세로 공간 절약 & 항상 표시 */
+  .toolrow{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:7px;}
+  .tool{background:var(--panel2);border:1px solid var(--line);
+    color:var(--txt);border-radius:10px;padding:8px 3px;font-size:11px;}
   .tool.active{border-color:var(--accent);color:var(--accent);}
 
   #perm{display:none;background:#3a2a12;border:1px solid var(--warn);color:#ffd88a;
@@ -89,7 +100,8 @@
     border-radius:8px;font-weight:700;white-space:nowrap;}
   #install .x{background:none;color:#9be3ad;padding:4px 8px;}
 
-  #toast{position:fixed;bottom:120px;left:50%;transform:translateX(-50%);
+  #toast{position:fixed;left:50%;transform:translateX(-50%);
+    bottom:calc(130px + env(safe-area-inset-bottom));
     background:#000c;border:1px solid var(--line);color:#fff;padding:10px 16px;
     border-radius:20px;font-size:13px;opacity:0;transition:.3s;pointer-events:none;z-index:99;
     max-width:90%;text-align:center;}
@@ -99,7 +111,8 @@
     justify-content:center;z-index:50;padding:16px;}
   .modal.show{display:flex;}
   .sheet{background:var(--panel);border:1px solid var(--line);border-radius:16px;
-    padding:18px;max-width:560px;width:100%;max-height:88vh;overflow:auto;}
+    padding:18px;max-width:560px;width:100%;max-height:85dvh;overflow:auto;
+    -webkit-overflow-scrolling:touch;}
   .sheet h2{margin:0 0 10px;font-size:16px;}
   .sheet h3{margin:16px 0 6px;font-size:13px;color:var(--txt);}
   .sheet p,.sheet li{font-size:13px;color:var(--sub);line-height:1.7;}
@@ -212,14 +225,13 @@
 <div id="log">
   <div class="empty" id="emptyMsg">
     🎙️ 아래 <b>말하기</b> 버튼을 누르고 말하면<br>실시간으로 통역됩니다.<br><br>
-    <b style="color:var(--accent2)">✅ 같은 말 반복 통역 문제 수정판</b><br>
-    ① 직전 처리 문장 중복 차단<br>
-    ② 시간 기반 동일 텍스트 필터(3초)<br>
-    ③ 재시작 세션 간 인식결과 완전 격리<br>
-    ④ 통역 진행 중 중복 요청 잠금(락)<br><br>
-    한국어·체코어·영어 상호 통역 지원<br>
-    <b>DeepL / Google + Cloudflare 프록시</b>로 CORS 완전 해결<br>
-    두코바니 폐수처리(WC/ST/WW/BS/BT/WS) 용어 자동 보정
+    <b style="color:var(--accent2)">✅ 하단 버튼 화면잘림 수정판</b><br>
+    ① <b>100dvh + JS 높이 보정</b>으로 주소창에 안 가림<br>
+    ② 하단 툴바 <b>3열 2행 그리드</b>로 세로 공간 절약<br>
+    ③ safe-area(노치·제스처바) 여백 자동 반영<br>
+    ④ 회전·주소창 접힘 시 실시간 재계산<br><br>
+    같은 말 반복 통역 차단 · 한국어·체코어·영어 상호 통역<br>
+    <b>DeepL / Google + Cloudflare 프록시</b>로 CORS 해결
   </div>
 </div>
 
@@ -325,21 +337,20 @@
 <!-- 배포 가이드 모달 -->
 <div class="modal" id="deployModal">
   <div class="sheet">
-    <h2>📖 배포 & 중복 반복 문제 해결</h2>
+    <h2>📖 배포 & 하단 버튼 잘림 문제 해결</h2>
 
-    <div class="fixbox"><b>🔧 "같은 말이 여러 번 반복 통역되던" 원인과 수정</b><br><br>
-    <b>원인 1 — 재시작 시 이전 세션 결과 재방출</b><br>
-    음성인식이 끊긴 뒤 자동 재시작(<code>onend→start</code>)할 때, 안드로이드 Chrome이 <b>직전 문장을 새 세션에서 또 final로 방출</b>하여 같은 문장이 2∼3번 통역됐습니다.<br><br>
-    <b>원인 2 — 중복 방지 로직 부재</b><br>
-    이전 버전은 들어온 텍스트를 <b>무조건 통역</b>했습니다. "방금 처리한 문장인지" 확인이 없었습니다.<br><br>
-    <b>✅ 이 버전의 3중 방어막</b><br>
-    ① <b>lastFinal 비교</b> — 직전 처리 문장과 동일하면 무시<br>
-    ② <b>시간 필터(3초)</b> — 3초 내 동일 텍스트 반복 차단<br>
-    ③ <b>세션 격리</b> — 재시작 때 인식 상태·처리 락 초기화<br>
-    ④ <b>처리 락</b> — 통역 진행 중 같은 문장 재진입 방지</div>
+    <div class="fixbox"><b>🔧 "하단 말하기 버튼이 화면 밖으로 잘려 안 보이던" 원인과 수정</b><br><br>
+    <b>원인 — 모바일 Chrome 주소창(툴바)이 화면을 차지</b><br>
+    이전 버전은 <code>height:100%</code>를 사용했는데, 모바일 브라우저는 <b>하단 주소창 높이를 100%에 포함시키지 않습니다</b>. 그래서 화면 아래쪽의 말하기 버튼·툴바가 <b>주소창 뒤로 숨어</b> 탭할 수 없었습니다.<br><br>
+    <b>✅ 이 버전의 수정</b><br>
+    ① <code>height:100dvh</code> — 주소창을 <b>제외한 실제 보이는 높이</b> 사용<br>
+    ② <code>--vh</code> JS 보정 — <code>dvh</code> 미지원 구형 브라우저 대비<br>
+    ③ <code>env(safe-area-inset-*)</code> — 노치·제스처바 여백 자동 확보<br>
+    ④ <code>resize/orientationchange</code> — 회전·주소창 접힘 시 실시간 재계산<br>
+    ⑤ 툴바를 <b>3열 2행 그리드</b>로 배치해 세로 공간 절약</div>
 
     <h3>🛡️ Cloudflare Workers 무료 프록시 (DeepL/Google CORS 완전 해결)</h3>
-    <p>DeepL API는 CORS 헤더를 주지 않아 브라우저에서 직접 호출하면 실패합니다. 아래 Worker 하나로 <b>DeepL·Google 모두</b> 프록시하여 CORS를 완전히 없앱니다. <b>무료 플랜 하루 10만 요청</b>이면 통역엔 충분합니다.</p>
+    <p>DeepL API는 CORS 헤더를 주지 않아 브라우저에서 직접 호출하면 실패합니다. 아래 Worker 하나로 <b>DeepL·Google 모두</b> 프록시하여 CORS를 완전히 없앱니다.</p>
 
     <details class="guide" open>
       <summary>① Cloudflare Worker 배포 (5분)</summary>
@@ -453,12 +464,11 @@ function json(obj, cors, status = 200) {
 }</pre>
     <button class="copybtn" id="copyWorker">📋 Worker 코드 복사</button>
 
-    <div class="note">✅ 이 앱은 프록시로 <code>POST { engine, text, source, target, context, key }</code> 형식으로 요청합니다. 위 코드는 이 형식을 그대로 처리하도록 작성되어 있으니 <b>수정 없이 바로 동작</b>합니다.</div>
-    <div class="note info"><b>더 안전한 방식:</b> Worker 코드 상단 <code>DEEPL_KEY</code>/<code>GOOGLE_KEY</code>에 키를 직접 넣으면, 앱에는 키를 저장하지 않고 <b>프록시 URL만</b> 넣어도 됩니다. (설정에서 엔진 선택 + 프록시 ON + 키 입력란은 비워둠)</div>
+    <div class="note">✅ 이 앱은 프록시로 <code>POST { engine, text, source, target, context, key }</code> 형식으로 요청합니다. 위 코드는 이 형식을 그대로 처리하므로 <b>수정 없이 바로 동작</b>합니다.</div>
 
     <h3>🌐 HTTPS 배포 (음성인식 필수 조건)</h3>
     <details class="guide">
-      <summary>🟣 GitHub Pages (사용 중인 방법 B)</summary>
+      <summary>🟣 GitHub Pages</summary>
       <div class="body">
         <div class="step"><div class="n">1</div><div class="t">저장소에 <b>index.html</b> 업로드</div></div>
         <div class="step"><div class="n">2</div><div class="t"><b>Settings → Pages → Branch: main → Save</b></div></div>
@@ -499,6 +509,22 @@ function json(obj, cors, status = 200) {
 <div id="toast"></div>
 
 <script>
+/* ================= ★ 화면 높이 보정 (하단 잘림 수정 핵심) ================= */
+function fixViewportHeight(){
+  // dvh 미지원 브라우저 대비: 실제 보이는 높이를 --vh 로 주입
+  const h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+  document.documentElement.style.setProperty('--vh', (h/100)+'px');
+}
+fixViewportHeight();
+window.addEventListener('resize', fixViewportHeight);
+window.addEventListener('orientationchange', ()=>setTimeout(fixViewportHeight,300));
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize', fixViewportHeight);
+  window.visualViewport.addEventListener('scroll', fixViewportHeight);
+}
+// 스크롤 시 주소창 접힘/펼침에 대응
+window.addEventListener('scroll', fixViewportHeight, {passive:true});
+
 /* ================= 상태 ================= */
 const S = {
   auto:true, tts:true, wake:false, big:false, glossary:true, glossaryHint:true,
@@ -511,11 +537,11 @@ const log = $('log');
 let history = [];
 let recognition = null, wakeLock = null, restartTimer=null, deferredPrompt=null;
 
-/* ★★★ 중복 반복 방지용 상태 ★★★ */
-let lastFinalText = '';      // 직전에 처리한 최종 문장
-let lastFinalTime = 0;       // 그 시각(ms)
-let processingLock = false;  // 통역 처리 중 재진입 방지 락
-const DEDUP_WINDOW = 3000;   // 3초 이내 동일 문장 차단
+/* 중복 반복 방지 상태 */
+let lastFinalText = '';
+let lastFinalTime = 0;
+let processingLock = false;
+const DEDUP_WINDOW = 3000;
 
 const ENGINE_LABEL={free:'🌐 무료',deepl:'⚡ DeepL',google:'🔵 Google'};
 
@@ -632,8 +658,7 @@ function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');
   clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2600);}
 function setStatus(on){ $('statusDot').classList.toggle('on',on); }
 function langName(code){return {ko:'한국어','ko-KR':'한국어',cs:'체코어','cs-CZ':'체코어',en:'영어','en-US':'영어'}[code]||code;}
-function escapeReg(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\__LATEX_CODE_BLOCK_0__'); }
-/* 비교용 정규화: 공백/구두점/대소문자 무시 */
+function escapeReg(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\__LATEX_CODE_BLOCK_1__'); }
 function normText(s){ return String(s).toLowerCase().replace(/[\s.,!?;:'"·…]+/g,'').trim(); }
 
 /* ================= 번역 엔진 ================= */
@@ -664,7 +689,6 @@ async function translate(text, from, to){
   return {text:out, glossaryHit:hit, engine:usedEngine};
 }
 
-/* --- 무료: MyMemory (CORS 허용) --- */
 async function translateFree(text,src,to){
   const url=`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${src}|${to}`;
   const ctrl=new AbortController(); const tid=setTimeout(()=>ctrl.abort(),8000);
@@ -675,7 +699,6 @@ async function translateFree(text,src,to){
   return out;
 }
 
-/* --- DeepL: 프록시 우선, 없으면 직접 --- */
 function deeplLangCode(c,isTarget){
   const m={ko:'KO',en:isTarget?'EN-GB':'EN',cs:'CS'};
   return m[c]||c.toUpperCase();
@@ -706,7 +729,6 @@ async function callDeepL(text,src,to,hints){
   return out;
 }
 
-/* --- Google: 프록시 우선, 없으면 직접 --- */
 async function callGoogle(text,src,to){
   if(S.useProxy && S.proxyUrl){
     return await proxyCall('google',text,src,to,'',S.googleKey);
@@ -725,7 +747,6 @@ async function callGoogle(text,src,to){
   const ta=document.createElement('textarea'); ta.innerHTML=out; return ta.value;
 }
 
-/* --- Cloudflare 프록시 공통 호출 --- */
 async function proxyCall(engine,text,src,to,context,key){
   const base=S.proxyUrl.replace(/\/+$/,'');
   const ctrl=new AbortController(); const tid=setTimeout(()=>ctrl.abort(),10000);
@@ -743,7 +764,6 @@ async function proxyCall(engine,text,src,to,context,key){
   return j.text;
 }
 
-/* 용어집 강제 보정 */
 function applyGlossaryStrict(text,to,hints){
   let out=text, hit=false;
   const dict=GMAP[to]; if(!dict) return {text,hit};
@@ -770,9 +790,7 @@ async function reqWake(){ try{ if('wakeLock' in navigator){ wakeLock=await navig
 function relWake(){ try{wakeLock&&wakeLock.release();wakeLock=null;}catch(e){} }
 document.addEventListener('visibilitychange',()=>{ if(S.wake && document.visibilityState==='visible') reqWake(); });
 
-/* =====================================================================
-   마이크 점유 충돌 수정 — 권한 확인 후 즉시 stop()
-   ===================================================================== */
+/* ================= 마이크 권한 ================= */
 async function checkMicPermission(){
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
     $('perm').style.display='block'; toast('이 브라우저는 마이크를 지원하지 않습니다'); return false;
@@ -793,12 +811,13 @@ async function checkMicPermission(){
 /* ================= 진단 ================= */
 async function updateDiag(){
   const lines=[];
+  const vv=(window.visualViewport&&Math.round(window.visualViewport.height))||window.innerHeight;
+  lines.push('보이는 높이: '+vv+'px (innerHeight '+window.innerHeight+') ✅ dvh 보정중');
   lines.push('프로토콜: '+location.protocol+(location.protocol==='https:'||location.protocol==='file:'?' ✅':' ⚠️(https 필요)'));
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
   lines.push('음성인식 지원: '+(SR?'✅':'❌ (Chrome 권장)'));
   lines.push('getUserMedia: '+((navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)?'✅':'❌'));
   lines.push('중복 차단: '+(S.dedup?'✅ ON (3초 필터+락)':'⛔ OFF'));
-  lines.push('직전 처리 문장: '+(lastFinalText?('"'+trunc(lastFinalText,24)+'"'):'-'));
   lines.push('번역 엔진: '+ENGINE_LABEL[S.engine]);
   lines.push('프록시: '+(S.useProxy&&S.proxyUrl?('✅ ON · '+S.proxyUrl.slice(0,32)+'…'):'⛔ OFF'));
   if(S.engine==='deepl') lines.push('DeepL 키: '+(S.deeplKey?'✅ 등록됨':(S.useProxy?'프록시에 내장됨(추정)':'⛔ 미등록')));
@@ -842,15 +861,13 @@ function buildRecognizer(){
     if(e.error==='not-allowed'||e.error==='service-not-allowed'){ $('perm').style.display='block'; stopRec(); toast('마이크 접근 차단됨'); updateDiag(); }
     else if(e.error==='audio-capture'){ toast('마이크 입력 없음 — 다른 앱이 마이크 사용 중인지 확인'); }
     else if(e.error==='network'){ toast('네트워크 오류 — 재시도'); }
-    else if(e.error==='no-speech'){ /* 무음 → onend에서 자동 재시작 */ }
-    else if(e.error==='aborted'){ /* 정상 중단 */ }
+    else if(e.error==='no-speech'){ }
+    else if(e.error==='aborted'){ }
   };
 
-  /* ★ 재시작 시 세션 격리: 처리 락 해제 + interim 잔여 정리
-     lastFinalText/Time 은 유지하여 재시작 직후 같은 문장 재방출을 차단 */
   r.onend=()=>{
     setStatus(false);
-    processingLock=false;              // 락 해제(다음 세션 대비)
+    processingLock=false;
     if(interimEl){ interimEl.remove(); interimEl=null; }
     if(S.recording && !S.manualStop){
       clearTimeout(restartTimer);
@@ -862,22 +879,14 @@ function buildRecognizer(){
   return r;
 }
 
-/* ★★★ 중복 방어의 핵심 함수 ★★★ */
 async function handleFinal(text){
   const now=Date.now();
   const norm=normText(text);
-
   if(S.dedup){
-    // 방어① 처리 중 재진입 차단(락)
     if(processingLock){ return; }
-    // 방어② 직전 문장과 동일 + 3초 이내면 무시 (재시작 재방출/중복 방출)
-    if(norm && norm===normText(lastFinalText) && (now-lastFinalTime)<DEDUP_WINDOW){
-      return;
-    }
-    // 방어③ 너무 짧은 잡음(1글자) 무시
+    if(norm && norm===normText(lastFinalText) && (now-lastFinalTime)<DEDUP_WINDOW){ return; }
     if(norm.length<1){ return; }
   }
-
   processingLock=true;
   lastFinalText=text; lastFinalTime=now;
 
@@ -904,7 +913,7 @@ async function handleFinal(text){
     saveLocal(); updateCount(); log.scrollTop=log.scrollHeight;
     updateDiag();
   }finally{
-    processingLock=false;   // 통역 완료(성공/실패 무관) 락 해제
+    processingLock=false;
   }
 }
 
@@ -926,7 +935,6 @@ async function startRec(){
   if(!recognition) return;
   recognition.lang=$('srcLang').value;
   S.recording=true; S.manualStop=false;
-  // ★ 새 대화 시작 시 중복 상태 초기화
   lastFinalText=''; lastFinalTime=0; processingLock=false;
   try{ recognition.start(); }
   catch(e){
@@ -1107,7 +1115,6 @@ $('googleTest').onclick=testGoogle;
 $('proxyTest').onclick=testProxy;
 $('proxyClear').onclick=()=>{ S.proxyUrl=''; $('proxyUrl').value=''; saveSettings(); updateDiag(); toast('프록시 URL 삭제'); };
 
-/* Worker 코드 복사 */
 $('copyWorker').onclick=async ()=>{
   const code=$('workerCode').textContent;
   try{ await navigator.clipboard.writeText(code); toast('✅ Worker 코드 복사됨'); }
@@ -1143,7 +1150,6 @@ $('clearBtn').onclick=()=>{
   }
 };
 
-/* 툴바 */
 $('autoBtn').onclick=()=>{ S.auto=!S.auto; syncUI(); saveSettings(); };
 $('ttsBtn').onclick=()=>{ S.tts=!S.tts; syncUI(); saveSettings(); };
 $('wakeBtn').onclick=()=>{ S.wake=!S.wake; S.wake?reqWake():relWake(); syncUI(); saveSettings(); };
@@ -1163,7 +1169,6 @@ $('expCsvSum').onclick=exportCsvSummary;
 $('expPdf').onclick=exportPdf;
 $('expTxt').onclick=exportTxt;
 
-/* 설정 모달 */
 $('settingsBtn').onclick=()=>{ $('settingsModal').classList.add('show'); updateDiag(); };
 $('closeSet').onclick=()=>$('settingsModal').classList.remove('show');
 document.querySelectorAll('.toggle').forEach(t=>{
@@ -1197,8 +1202,8 @@ function setupPWA(){
   const icon='data:image/svg+xml,'+encodeURIComponent(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="110" fill="#2f81f7"/><text x="256" y="360" font-size="280" text-anchor="middle">🎙️</text></svg>`);
   const manifest={
-    name:"실시간 통역 (중복반복 수정판)", short_name:"통역앱",
-    description:"체코·영어·한국어 실시간 통역 · 중복 문장 차단 · DeepL/Google + Cloudflare 프록시 · 두코바니 폐수처리 용어",
+    name:"실시간 통역 (하단버튼 수정판)", short_name:"통역앱",
+    description:"체코·영어·한국어 실시간 통역 · 하단 버튼 화면잘림 수정 · DeepL/Google + Cloudflare 프록시",
     start_url:".", scope:".", display:"standalone",
     background_color:"#0d1117", theme_color:"#0d1117", orientation:"portrait",
     icons:[{src:icon,sizes:"192x192",type:"image/svg+xml",purpose:"any maskable"},
@@ -1210,7 +1215,7 @@ function setupPWA(){
 
   if('serviceWorker' in navigator){
     const swCode=`
-      const CACHE='interp-pwa-v4';
+      const CACHE='interp-pwa-v5';
       self.addEventListener('install',e=>{ self.skipWaiting(); });
       self.addEventListener('activate',e=>{ e.waitUntil(clients.claim()); });
       self.addEventListener('fetch',e=>{
@@ -1226,7 +1231,7 @@ function setupPWA(){
     const swBlob=new Blob([swCode],{type:'text/javascript'});
     navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(()=>{});
     if(navigator.serviceWorker.controller===null){
-      navigator.serviceWorker.ready.then(()=>{ try{ caches.open('interp-pwa-v4').then(c=>c.add(location.href).catch(()=>{})); }catch(_){} });
+      navigator.serviceWorker.ready.then(()=>{ try{ caches.open('interp-pwa-v5').then(c=>c.add(location.href).catch(()=>{})); }catch(_){} });
     }
   }
 
@@ -1242,6 +1247,7 @@ function setupPWA(){
 
 /* ================= 초기화 ================= */
 loadSettings(); syncUI(); loadLocal(); updateCount(); setupPWA(); updateDiag();
+fixViewportHeight();
 
 if(location.protocol!=='https:' && location.hostname!=='localhost' && location.protocol!=='file:'){
   toast('⚠︎ 음성 기능은 HTTPS에서만 동작합니다 · 📖배포 참고');
@@ -1256,4 +1262,3 @@ window.addEventListener('beforeunload',()=>{ try{recognition&&recognition.abort(
 </script>
 </body>
 </html>
-</artifact>
