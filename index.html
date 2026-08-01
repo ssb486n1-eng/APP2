@@ -107,6 +107,33 @@
     max-width:90%;text-align:center;}
   #toast.show{opacity:1;}
 
+  /* ===== 이중언어 자막 화면 ===== */
+  #subtitle{position:fixed;inset:0;z-index:80;background:#05070a;display:none;
+    flex-direction:column;padding-top:env(safe-area-inset-top);
+    padding-bottom:env(safe-area-inset-bottom);}
+  #subtitle.show{display:flex;}
+  #subtitle .pane{flex:1 1 50%;min-height:0;display:flex;flex-direction:column;
+    padding:14px 16px;overflow:hidden;}
+  #subtitle .pane.top{border-bottom:2px solid #1f2937;background:#0b1220;}
+  #subtitle .pane .plbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--sub);flex:none;margin-bottom:6px;display:flex;justify-content:space-between;}
+  #subtitle .pane .body{flex:1 1 auto;min-height:0;overflow-y:auto;
+    display:flex;flex-direction:column;justify-content:flex-end;gap:6px;}
+  #subtitle .done{font-size:calc(var(--fs,17px) * 1.45);line-height:1.35;font-weight:600;
+    white-space:pre-wrap;word-break:break-word;}
+  #subtitle .live{font-size:calc(var(--fs,17px) * 1.3);line-height:1.35;
+    opacity:.55;font-style:italic;white-space:pre-wrap;word-break:break-word;}
+  #subtitle .pane.top .done{color:#e6edf3;}
+  #subtitle .pane.bot .done{color:#7fb2ff;}
+  #subtitle .pane.flip{transform:rotate(180deg);}
+  #subbar{flex:none;display:flex;gap:6px;padding:8px 12px;background:var(--panel);
+    border-top:1px solid var(--line);}
+  #subbar button{flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+    border-radius:10px;padding:11px 4px;font-size:12px;}
+  #subbar button.on{border-color:var(--accent);color:var(--accent);}
+  #subbar button.stop{background:var(--danger);border-color:var(--danger);color:#fff;font-weight:700;}
+  #subbar button.go{background:var(--accent2);border-color:var(--accent2);color:#fff;font-weight:700;}
+
   .modal{position:fixed;inset:0;background:#000a;display:none;align-items:center;
     justify-content:center;z-index:50;padding:16px;}
   .modal.show{display:flex;}
@@ -247,11 +274,11 @@
     <button class="iconbtn" id="clearBtn" title="지우기">🗑️</button>
   </div>
   <div class="toolrow">
-    <button class="tool" id="previewBtn">👁 미리보기</button>
+    <button class="tool" id="subBtn">🖥 자막화면</button>
     <button class="tool" id="ttsBtn">🔊 음성출력</button>
+    <button class="tool" id="previewBtn">👁 미리보기</button>
     <button class="tool" id="wakeBtn">💡 화면유지</button>
     <button class="tool" id="recordBtn">📋 기록</button>
-    <button class="tool" id="deployBtn">📖 배포</button>
     <button class="tool" id="bigBtn">🔠 큰글씨</button>
   </div>
 </footer>
@@ -269,7 +296,15 @@
     <div class="sliderlbl"><span>최대 누적 길이 (강제 확정)</span><b id="hardLbl">180자</b></div>
     <input type="range" class="slider" id="hardRange" min="60" max="400" step="20" value="180">
 
-    <div class="kv" style="margin-top:10px"><span>🔇 음성출력 중 마이크 차단<small>끄면 스피커 소리를 다시 인식해 무한 반복이 발생합니다</small></span><button class="toggle" data-s="duck"></button></div>
+    <h3>🔊 음성출력 방식 (실시간성 ↔ 되먹임 방지)</h3>
+    <div class="note info">같은 기기의 <b>스피커로 소리를 내면서 마이크로 듣는 것</b>은 물리적으로 되먹임을 피할 수 없습니다. 아래 세 방식 중 상황에 맞는 것을 고르세요.</div>
+    <div class="kv"><span>🔊 통역 결과 음성 읽기<small>끄면 <b>자막 모드</b> — 마이크가 절대 꺼지지 않아 유실 0. 대화가 이어지는 회의에 권장</small></span><button class="toggle" data-s="tts"></button></div>
+    <div class="kv"><span>🎧 이어폰 모드<small>켜면 음성출력 중에도 <b>계속 듣습니다</b>. 이어폰·헤드셋 필수. 스피커로 쓰면 반복 발생</small></span><button class="toggle" data-s="duckOff"></button></div>
+    <div class="kv"><span>⏸ 말이 멈출 때까지 음성출력 대기<small>스피커 모드에서 상대가 말하는 동안 재생을 미뤄 유실을 최소화</small></span><button class="toggle" data-s="ttsGap"></button></div>
+    <div class="sliderlbl"><span>음성출력 속도 (빠를수록 공백이 짧음)</span><b id="rateLbl">1.15×</b></div>
+    <input type="range" class="slider" id="rateRange" min="0.9" max="1.8" step="0.05" value="1.15">
+
+    <h3>🧩 기타 인식 옵션</h3>
     <div class="kv"><span>👁 실시간 미리보기 번역<small>말하는 도중 임시 번역 표시 (API 사용량 증가)</small></span><button class="toggle" data-s="preview"></button></div>
     <div class="kv"><span>🚫 중복 문장 자동 차단</span><button class="toggle" data-s="dedup"></button></div>
     <div class="note info">이 앱은 안드로이드가 3~5초마다 인식 세션을 강제 종료해도 <b>버퍼를 유지한 채 즉시 세션을 재시작</b>합니다. 따라서 세션 종료는 문장의 끝이 아니며, 문장 확정은 위 무음 시간·문장부호·최대 길이로만 판단합니다.</div>
@@ -329,7 +364,6 @@
     <div class="note warn">🔒 API 키·프록시 URL은 이 기기의 <b>브라우저(localStorage)에만</b> 저장됩니다. 공용 PC에서는 사용 후 삭제하세요.</div>
 
     <h3>⚙️ 기타 옵션</h3>
-    <div class="kv"><span>통역 결과 음성 읽기(TTS)</span><button class="toggle" data-s="tts"></button></div>
     <div class="kv"><span>화면 항상 켜기</span><button class="toggle" data-s="wake"></button></div>
     <div class="kv"><span>큰 자막 모드</span><button class="toggle" data-s="big"></button></div>
     <div class="kv"><span>두코바니 용어집 자동 보정</span><button class="toggle" data-s="glossary"></button></div>
@@ -345,6 +379,8 @@
     <h3>📘 등록된 전문 용어집</h3>
     <p id="glossaryCount">-</p>
     <p style="margin:0">두코바니 발전소 폐수처리 계통(WC 냉각수·ST 증기·WW 폐수·BS 붕산·BT 처리·WS 급수) 용어를 한↔영↔체코 3방향으로 자동 보정합니다.</p>
+
+    <button class="exportbtn" id="deployBtn" style="text-align:center"><b>📖 배포 가이드 · Cloudflare Worker 코드</b></button>
 
     <button class="close" id="closeSet">닫기</button>
   </div>
@@ -362,6 +398,8 @@
     안드로이드에서 <code>isFinal</code>/<code>onend</code>는 "말이 끝났다"가 아니라 <b>무음 3~5초 타임아웃</b>입니다. → 이제 세션 종료 시 <b>번역을 확정하지 않고</b> 버퍼를 유지한 채 재시작만 하며, 확정은 무음 타이머·문장부호·최대 길이로만 판단합니다.<br><br>
     <b>원인 ③ TTS 되먹임 루프</b><br>
     번역 음성이 스피커 → 마이크로 재입력되어 재인식·재번역되었습니다. → 음성 출력 중 마이크를 자동 차단합니다.<br><br>
+    <b>원인 ⑤ 누적형 인식 결과 (같은 말 4~6회 반복의 진짜 원인)</b><br>
+    안드로이드는 <code>results[0]="나는"</code>, <code>results[1]="나는 오늘"</code>, <code>results[2]="나는 오늘 공룡"</code> 처럼 <b>매번 전체 문장을 다시</b> 담아 보냅니다. 인덱스 기준으로 새 결과만 이어붙이면 계단식으로 중복됩니다. → 이제 인덱스가 아니라 <b>단어 겹침(overlap) 병합</b>으로 처리하며, 세션 간 재전달 제거와 반복 블록 축약 안전망을 함께 적용합니다.<br><br>
     <b>원인 ④ 좀비 세션</b><br>
     안드로이드가 <code>onend</code> 없이 인식을 죽이는 경우가 있습니다. → 3초 주기 워치독이 감지해 부활시킵니다.</div>
 
@@ -553,6 +591,23 @@ function json(obj, cors, status = 200) {
   </div>
 </div>
 
+<div id="subtitle">
+  <div class="pane top" id="subTopPane">
+    <div class="plbl"><span id="subTopLbl">원문</span><span id="subTopHint"></span></div>
+    <div class="body"><div class="done" id="subTopDone"></div><div class="live" id="subTopLive"></div></div>
+  </div>
+  <div class="pane bot" id="subBotPane">
+    <div class="plbl"><span id="subBotLbl">통역</span><span id="subBotHint"></span></div>
+    <div class="body"><div class="done" id="subBotDone"></div><div class="live" id="subBotLive"></div></div>
+  </div>
+  <div id="subbar">
+    <button id="subMic" class="go">🎤 시작</button>
+    <button id="subFlipBtn">🔄 상대쪽 뒤집기</button>
+    <button id="subFontBtn">🔠 크기</button>
+    <button id="subClose">✕ 닫기</button>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -581,13 +636,17 @@ const CFG = {
   DEAD_AIR_MS      : 20000, // 살아있다는데 무이벤트 → 강제 재기동
   CACHE_MAX        : 400,
   DEDUP_WINDOW     : 4000,
-  CONTEXT_CHARS    : 220
+  CONTEXT_CHARS    : 220,
+  TTS_GAP_MS       : 700,   // 이만큼 조용해야 대기중인 음성출력을 재생
+  TTS_QUEUE_MAX    : 4,     // 큐가 이보다 밀리면 기다리지 않고 재생
+  UNDUCK_DELAY_MS  : 120    // 음성출력 종료 후 마이크 재개 지연
 };
 
 /* ================= 상태 ================= */
 const S = {
   tts:true, wake:false, big:false, glossary:true, glossaryHint:true,
-  dedup:true, duck:true, preview:true, fs:17, recording:false,
+  dedup:true, duck:true, ttsGap:true, ttsRate:1.15, preview:true,
+  fs:17, recording:false,
   engine:'free', deeplKey:'', googleKey:'',
   proxyUrl:'', useProxy:false,
   silenceMs:CFG.SILENCE_FLUSH_MS, hardChars:CFG.HARD_FLUSH_CHARS
@@ -745,6 +804,68 @@ function normText(s){ return String(s).toLowerCase().replace(/[\s.,!?;:'"·…]+
 function trunc(s,n){ s=String(s); return s.length>n?s.slice(0,n)+'…':s; }
 
 /* =========================================================================
+   ★★ 누적형 인식 결과 병합 (같은 말 4~6회 반복 문제의 진짜 해결책) ★★
+
+   안드로이드 음성인식기는 results[0], results[1], results[2] … 에
+   "델타"가 아니라 "지금까지의 전체 문장"을 매번 다시 담아 보냅니다.
+     results[0] = "나는"
+     results[1] = "나는 오늘"
+     results[2] = "나는 오늘 공룡"
+   따라서 인덱스로 새 결과만 골라 이어붙이면 문장이 계단식으로 중복됩니다.
+   → 인덱스가 아니라 "단어 겹침"으로 병합해야 합니다.
+   ========================================================================= */
+function words(s){
+  return String(s||'').replace(/\s+/g,' ').trim().split(' ').filter(Boolean);
+}
+
+/* base 의 꼬리와 inc 의 머리가 겹치면 겹친 만큼만 이어붙임.
+   base=[나는],           inc=[나는,오늘]        → [나는,오늘]        (누적형)
+   base=[나는,오늘],      inc=[공룡,대박]        → [나는,오늘,공룡,대박] (델타형)
+   두 방식 모두 안전하게 처리됨 */
+function mergeWords(base, inc){
+  if(!base.length) return inc.slice();
+  if(!inc.length)  return base.slice();
+  const max=Math.min(base.length, inc.length);
+  for(let k=max;k>0;k--){
+    let ok=true;
+    for(let j=0;j<k;j++){ if(base[base.length-k+j]!==inc[j]){ ok=false; break; } }
+    if(ok) return base.concat(inc.slice(k));
+  }
+  return base.concat(inc);
+}
+
+/* 세션 재시작 직후 이전 세션 마지막 문장이 통째로 재전달되는 것을 제거 */
+function stripLeadingOverlap(tail, inc){
+  const max=Math.min(tail.length, inc.length);
+  for(let k=max;k>0;k--){
+    let ok=true;
+    for(let j=0;j<k;j++){ if(tail[tail.length-k+j]!==inc[j]){ ok=false; break; } }
+    if(ok) return inc.slice(k);
+  }
+  return inc;
+}
+
+/* 최종 안전망: 연속 반복 블록 축약
+   "A B C A B C A B C" → "A B C"
+   오탐을 줄이려고 블록 길이별로 최소 반복 횟수를 다르게 둠 */
+function collapseRepeats(w){
+  let out=w.slice();
+  for(let n=Math.floor(out.length/2); n>=1; n--){
+    let i=0;
+    while(i+n<=out.length){
+      const blk=out.slice(i,i+n).join('\u0001');
+      let reps=1;
+      while(i+(reps+1)*n<=out.length &&
+            out.slice(i+reps*n,i+(reps+1)*n).join('\u0001')===blk) reps++;
+      const minReps = (n>=3)?2 : (n===2)?3 : 4;
+      if(reps>=minReps) out.splice(i+n,(reps-1)*n);
+      i+=n;
+    }
+  }
+  return out;
+}
+
+/* =========================================================================
    번역 계층 — 캐시 + 미리보기 요청 취소 + 폴백
    ========================================================================= */
 const trCache = new Map();
@@ -887,24 +1008,94 @@ async function proxyCall(engine,text,src,to,context,key,ext){
 }
 
 /* =========================================================================
-   TTS — 큐 방식 + 재생 중 마이크 차단(되먹임 루프 차단)
+   ★★ TTS — 대기열 + "말이 멈춘 순간에만 재생" (발화 유실 최소화) ★★
+
+   물리적 제약: 같은 기기의 스피커로 소리를 내면서 마이크로 들으면
+   반드시 되먹임(스피커→마이크→재인식)이 발생합니다. Web Speech API는
+   인식기에 오디오 스트림을 넘길 수 없어 에코제거(AEC)를 걸 방법이 없습니다.
+   그래서 아래 3가지 모드로 분리합니다.
+
+   ① 자막 모드   (tts=off)              : 마이크가 절대 안 꺼짐. 완전 실시간.
+   ② 이어폰 모드 (tts=on, duck=off)     : 물리적 분리. 마이크 안 꺼짐. 최선.
+   ③ 스피커 모드 (tts=on, duck=on)      : 되먹임 차단 필요 → 재생 중 마이크 OFF.
+        └ ttsGap=on 이면 "상대가 말을 멈춘 순간"에만 재생해 유실을 최소화.
    ========================================================================= */
-let ttsDepth = 0;
-function speak(text, lang){
+const ttsQ = [];
+let ttsBusy = false, ttsPumpTimer = null;
+
+function ttsClean(t){ return String(t).replace(/⚠︎.*/,'').trim(); }
+
+function enqueueTTS(text, lang){
   if(!S.tts || !window.speechSynthesis) return;
-  const clean=String(text).replace(/⚠︎.*/,'').trim();
+  const clean=ttsClean(text);
   if(!clean) return;
+  ttsQ.push({text:clean, lang});
+  pumpTTS();
+}
+
+function pumpTTS(){
+  clearTimeout(ttsPumpTimer);
+  if(ttsBusy || !ttsQ.length) return;
+
+  // 이어폰 모드(되먹임 차단 OFF)는 마이크를 끄지 않으므로 즉시 재생
+  if(!S.duck){ playTTS(); return; }
+
+  // 스피커 모드 + 침묵대기: 상대가 말하는 중이면 재생을 미룬다
+  if(S.ttsGap && stt.running && ttsQ.length<=CFG.TTS_QUEUE_MAX){
+    const quiet = (Date.now()-stt.lastEventAt > CFG.TTS_GAP_MS)
+                  && !stt.pending && !stt.interim;
+    if(!quiet){ ttsPumpTimer=setTimeout(pumpTTS,150); return; }
+  }
+  playTTS();
+}
+
+function playTTS(){
+  const item=ttsQ.shift();
+  if(!item) return;
+  ttsBusy=true;
+  if(S.duck){ stt.mute(true); setStatus('duck'); }
+
   let u;
-  try{ u=new SpeechSynthesisUtterance(clean); }catch(e){ return; }
-  u.lang=lang; u.rate=1;
-  ttsDepth++;
-  if(S.duck && ttsDepth===1){ stt.mute(true); setStatus('duck'); }
+  try{ u=new SpeechSynthesisUtterance(item.text); }
+  catch(e){ ttsBusy=false; return; }
+  u.lang=item.lang; u.rate=S.ttsRate;
+
+  let finished=false;
   const done=()=>{
-    ttsDepth=Math.max(0,ttsDepth-1);
-    if(S.duck && ttsDepth===0) setTimeout(()=>{ stt.mute(false); }, 250);
+    if(finished) return; finished=true;
+    ttsBusy=false;
+    // 큐에 더 있으면 음소거를 유지한 채 연속 재생 (mute 토글 반복 방지)
+    if(S.duck && !ttsQ.length){
+      setTimeout(()=>{ if(!ttsBusy && !ttsQ.length) stt.mute(false); }, CFG.UNDUCK_DELAY_MS);
+    }
+    ttsPumpTimer=setTimeout(pumpTTS,60);
   };
   u.onend=done; u.onerror=done;
+  // 일부 안드로이드에서 onend 가 유실되는 사례 대비 (대략 재생시간 + 여유)
+  setTimeout(done, Math.min(30000, 1200 + item.text.length*90/S.ttsRate));
+
   try{ speechSynthesis.speak(u); }catch(e){ done(); }
+}
+
+/* 말풍선의 🔊 버튼 — 사용자가 직접 누른 경우는 즉시 재생 */
+function speakNow(text, lang){
+  if(!window.speechSynthesis) return;
+  const clean=ttsClean(text); if(!clean) return;
+  try{
+    const u=new SpeechSynthesisUtterance(clean);
+    u.lang=lang; u.rate=S.ttsRate;
+    if(S.duck && stt.running){
+      stt.mute(true); setStatus('duck');
+      const done=()=>setTimeout(()=>stt.mute(false), CFG.UNDUCK_DELAY_MS);
+      u.onend=done; u.onerror=done;
+    }
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+function clearTTS(){
+  ttsQ.length=0; ttsBusy=false; clearTimeout(ttsPumpTimer);
+  try{ speechSynthesis.cancel(); }catch(e){}
 }
 
 /* =========================================================================
@@ -921,7 +1112,9 @@ class ContinuousSTT {
     this.running=false; this.muted=false; this.alive=false; this.restarting=false;
     this.rec=null; this.lang='ko-KR';
     this.pending=''; this.interim='';
-    this.lastFinalIdx=-1;       // ★ 세션마다 리셋 — 중복 누적 방지 핵심
+    this.pendW=[];              // ★ 세션이 끊겨도 살아남는 미확정 단어 버퍼
+    this.sessWords=[];          // 현재 세션의 병합 전문 (세션마다 리셋)
+    this.tail=[];               // 직전 flush 의 꼬리 (세션 간 중복 제거용)
     this.lastEventAt=0; this.backoff=CFG.RESTART_DELAY_MS;
     this.flushTimer=null;
     setInterval(()=>this._watch(), CFG.WATCHDOG_MS);
@@ -931,7 +1124,8 @@ class ContinuousSTT {
     if(!SR){ this.h.onState('음성인식 미지원 (Chrome 사용)', true); return false; }
     this.lang=lang; this.running=true; this.muted=false;
     this.backoff=CFG.RESTART_DELAY_MS;
-    this.pending=''; this.interim=''; 
+    this.pending=''; this.interim=''; this.tail=[];
+    this.pendW=[]; this.sessWords=[];
     this._begin();
     return true;
   }
@@ -948,7 +1142,8 @@ class ContinuousSTT {
   setLang(lang){
     if(this.lang===lang) return;
     this.lang=lang;
-    this.pending=''; this.interim='';
+    this.pending=''; this.interim=''; this.tail=[];
+    this.pendW=[]; this.sessWords=[];
     if(this.running && this.rec){ try{ this.rec.abort(); }catch(e){} }
   }
 
@@ -968,7 +1163,10 @@ class ContinuousSTT {
     rec.interimResults=true;
     rec.maxAlternatives=1;
 
-    this.lastFinalIdx=-1;         // ★ 세션 인덱스 리셋
+    // ★ 세션 전문만 리셋한다. pendW(미확정 버퍼)는 절대 지우지 않는다.
+    //   여기서 pendW 를 지우면 확정 타이머가 터지기 전에 세션이 재시작될 때
+    //   방금 들은 문장이 통째로 사라진다 (= 통역을 못 하고 지나가는 증상).
+    this.sessWords=[];
     this.lastEventAt=Date.now();
 
     rec.onstart=()=>{
@@ -1012,28 +1210,35 @@ class ContinuousSTT {
 
   _onResult(e){
     this.lastEventAt=Date.now();
-    let addedFinal='', interim='';
 
-    // ★ resultIndex 부터만 순회 (0부터 돌리면 같은 문장이 중복 누적됨)
-    for(let i=e.resultIndex;i<e.results.length;i++){
-      const res=e.results[i];
-      const txt=res[0].transcript;
-      if(res.isFinal){
-        if(i>this.lastFinalIdx){          // 재전달된 final 방어
-          addedFinal+=txt; this.lastFinalIdx=i;
-        }
-      }else{
-        interim+=txt;
-      }
+    // ★ 인덱스가 아니라 "단어 겹침"으로 병합한다.
+    //   안드로이드는 results[i] 마다 전체 문장을 다시 담아 보내므로
+    //   인덱스로 골라 이어붙이면 계단식 중복이 발생한다.
+    let fin=[], itm=[];
+    for(let i=0;i<e.results.length;i++){
+      const w=words(e.results[i][0].transcript);
+      if(e.results[i].isFinal) fin=mergeWords(fin,w);
+      else                     itm=mergeWords(itm,w);
     }
 
-    if(addedFinal.trim()){
-      this.pending=(this.pending+' '+addedFinal.trim()).replace(/\s+/g,' ').trim();
+    // mergeWords 는 항상 base 를 접두사로 보존하므로 sessWords 는 단조 증가한다
+    const prevLen=this.sessWords.length;
+    this.sessWords=mergeWords(this.sessWords, fin);
+    let delta=this.sessWords.slice(prevLen);
+
+    // 세션이 막 시작됐고 대기 버퍼가 비어 있으면, 직전에 확정한 문장이
+    // 통째로 재전달된 것일 수 있으므로 겹치는 앞부분을 제거
+    if(prevLen===0 && !this.pendW.length && this.tail.length){
+      delta=stripLeadingOverlap(this.tail, delta);
     }
-    this.interim=interim.trim();
+    if(delta.length) this.pendW=mergeWords(this.pendW, delta);
+
+    this.pending=this.pendW.join(' ');
+    this.interim=mergeWords(this.sessWords, itm).slice(this.sessWords.length).join(' ');
+
     this.h.onPartial(this.pending, this.interim);
 
-    if(this.pending){
+    if(this.pendW.length){
       if(/[.!?。？！…]["'）)\]]?$/.test(this.pending) || this.pending.length>=S.hardChars){
         this._flush();
       }else{
@@ -1049,16 +1254,25 @@ class ContinuousSTT {
 
   _flush(){
     clearTimeout(this.flushTimer);
-    const text=this.pending.trim();
-    if(!text) return;
+    if(!this.pendW.length) return;
+    const text=collapseRepeats(this.pendW).join(' ').trim();   // 최종 안전망
+    this.tail=this.pendW.slice(-24);                           // 다음 세션 중복 제거용
+    this.pendW=[];
     this.pending=''; this.interim='';
     this.h.onPartial('','');
-    this.h.onSegment(text);
+    if(text) this.h.onSegment(text);
   }
 
   _watch(){
-    if(!this.running || this.muted) return;
+    if(!this.running) return;
     const now=Date.now();
+
+    // ★ 어떤 경로로든 확정되지 못하고 남은 버퍼를 회수 (유실 최종 안전망)
+    if(this.pendW.length && now-this.lastEventAt > Math.max(2500, S.silenceMs*2)){
+      this._flush();
+    }
+
+    if(this.muted) return;
     if(!this.alive && !this.restarting){ this._begin(); return; }      // 좀비 부활
     if(this.alive && now-this.lastEventAt>CFG.DEAD_AIR_MS){            // 무응답 강제 재기동
       try{ this.rec.abort(); }catch(e){}
@@ -1081,11 +1295,15 @@ function addBubble(cls,label,text,interim){
   d.innerHTML='<div class="lbl"><span></span><button class="speak">🔊</button></div><div class="orig"></div>';
   d.querySelector('.lbl span').textContent=label;
   d.querySelector('.orig').textContent=text||'';
-  d.querySelector('.speak').onclick=()=>speak(d.querySelector('.orig').textContent,$('srcLang').value);
+  d.querySelector('.speak').onclick=()=>speakNow(d.querySelector('.orig').textContent,$('srcLang').value);
   return d;
 }
 
-function clearInterim(){ if(interimEl){ interimEl.remove(); interimEl=null; } previewLastText=''; }
+function clearInterim(){
+  if(interimEl){ interimEl.remove(); interimEl=null; }
+  previewLastText='';
+  subLiveSrc=''; subLiveDst=''; renderSub();
+}
 
 function onPartial(committed, interim){
   const live=(committed+' '+interim).trim();
@@ -1097,6 +1315,7 @@ function onPartial(committed, interim){
   }
   interimEl.querySelector('.orig').textContent=live;
   log.scrollTop=log.scrollHeight;
+  subLiveSrc=live; renderSub();
 
   // 실시간 미리보기 번역 (무료 엔진은 쿼터 보호를 위해 제외)
   if(!S.preview || S.engine==='free') return;
@@ -1115,7 +1334,7 @@ function onPartial(committed, interim){
 
   translate(live, $('srcLang').value, $('dstLang').value,
             {signal:previewCtrl.signal, noFallback:true, noCache:false})
-    .then(r=>{ if(interimEl===bubble) tr.textContent=r.text; })
+    .then(r=>{ if(interimEl===bubble){ tr.textContent=r.text; subLiveDst=r.text; renderSub(); } })
     .catch(()=>{ /* 취소·타임아웃은 무시 — 곧 다음 요청이 옴 */ });
 }
 
@@ -1124,9 +1343,14 @@ async function onSegment(text){
 
   const now=Date.now();
   if(S.dedup){
-    const n=normText(text);
+    const n=normText(text), p=normText(lastFlushed);
     if(!n) return;
-    if(n===normText(lastFlushed) && now-lastFlushTime<CFG.DEDUP_WINDOW) return;
+    if(p && now-lastFlushTime<CFG.DEDUP_WINDOW){
+      // 완전 동일뿐 아니라 "포함" 관계도 중복으로 간주 (누적형 재전달 방어)
+      if(n===p) return;
+      if(n.length>=6 && p.includes(n)) return;
+      if(p.length>=6 && n.includes(p) && n.length < p.length*1.4) return;
+    }
   }
   lastFlushed=text; lastFlushTime=now;
 
@@ -1142,11 +1366,16 @@ async function onSegment(text){
   bubble.appendChild(tr);
   log.scrollTop=log.scrollHeight;
 
+  const subEntry={src:text,dst:'…'};
+  subLog.push(subEntry); if(subLog.length>30) subLog.shift();
+  renderSub();
+
   // ★ 락 없음 — 이 await 동안에도 인식은 계속되고 다음 문장도 병렬 처리됨
   const {text:translated, glossaryHit, engine}=await translate(text,from,to);
 
   tr.className = engine==='none' ? 'tr fail' : 'tr';
   tr.textContent=translated;
+  subEntry.dst=translated; renderSub();
 
   const lbl=bubble.querySelector('.lbl');
   if(glossaryHit){ const tag=document.createElement('span'); tag.className='gtag'; tag.textContent='📘용어보정'; lbl.appendChild(tag); }
@@ -1157,16 +1386,51 @@ async function onSegment(text){
   contextBuf.push(text); if(contextBuf.length>3) contextBuf.shift();
 
   const ttsLang={cs:'cs-CZ',en:'en-US',ko:'ko-KR'}[to];
-  speak(translated,ttsLang);
+  enqueueTTS(translated,ttsLang);
 
   history.push({time:new Date().toISOString(),from:langName(from),to:langName(to),
                 src:text,dst:translated,glossary:glossaryHit,engine});
   saveLocal(); updateCount(); log.scrollTop=log.scrollHeight; updateDiag();
 }
 
+/* =========================================================================
+   🖥 이중언어 자막 화면 — 원문/통역을 동시에 크게 표시
+   위쪽: 말하는 언어(원문) · 아래쪽: 통역 언어
+   마주 앉은 상대를 위해 한쪽 창을 180° 뒤집을 수 있음
+   ========================================================================= */
+let subOn=false;
+const subLog=[];
+let subLiveSrc='', subLiveDst='';
+
+function subLangLabels(){
+  $('subTopLbl').textContent=langName($('srcLang').value)+' · 원문';
+  $('subBotLbl').textContent=langName($('dstLang').value)+' · 통역';
+}
+function renderSub(){
+  if(!subOn) return;
+  const items=subLog.slice(-2);
+  $('subTopDone').textContent=items.map(x=>x.src).join('\n');
+  $('subBotDone').textContent=items.map(x=>x.dst).join('\n');
+  $('subTopLive').textContent=subLiveSrc;
+  $('subBotLive').textContent=subLiveDst;
+}
+function updateSubMic(){
+  const b=$('subMic'); if(!b) return;
+  b.textContent=S.recording?'⏹ 정지':'🎤 시작';
+  b.className=S.recording?'stop':'go';
+  $('subTopHint').textContent=S.recording?'● 듣는 중':'';
+}
+function openSub(){
+  subOn=true; $('subtitle').classList.add('show');
+  subLangLabels(); renderSub(); updateSubMic();
+  if(!S.tts) $('subBotHint').textContent='자막 모드';
+  reqWake();
+}
+function closeSub(){ subOn=false; $('subtitle').classList.remove('show'); if(!S.wake) relWake(); }
+
 function onState(msg,isErr,kind){
   if(msg==='live'){ setStatus('live'); return; }
-  if(msg==='idle'||msg==='중지됨'){ setStatus('off'); if(msg==='중지됨') return; return; }
+  if(msg==='idle'||msg==='중지됨'){ setStatus('off'); return; }
   if(kind==='perm'){ $('perm').style.display='block'; stopRec(); updateDiag(); }
   if(isErr) toast(msg);
 }
@@ -1213,7 +1477,10 @@ async function updateDiag(){
   lines.push('세션: '+(stt.running?(stt.muted?'🔇 TTS로 차단중':(stt.alive?'✅ 활성':'♻️ 재시작중')):'⏹ 정지'));
   lines.push('버퍼: "'+trunc(stt.pending,28)+'" ('+stt.pending.length+'자)');
   lines.push('확정 대기: '+S.silenceMs+'ms · 강제확정 '+S.hardChars+'자');
-  lines.push('TTS 되먹임 차단: '+(S.duck?'✅ ON':'⛔ OFF (반복 위험)'));
+  lines.push('음성출력 모드: '+(!S.tts?'📄 자막 모드 (마이크 유실 0)'
+                      : (!S.duck?'🎧 이어폰 모드 (마이크 유실 0)'
+                      : (S.ttsGap?'🔇 스피커+침묵대기':'🔇 스피커 즉시재생 (유실 큼)'))));
+  lines.push('TTS 대기열: '+ttsQ.length+'건 '+(ttsBusy?'· 재생중':'')+' · '+S.ttsRate.toFixed(2)+'×');
   lines.push('미리보기: '+(S.preview?(S.engine==='free'?'⚠️ 무료엔진에서 자동 OFF':'✅ ON'):'⛔ OFF'));
   lines.push('중복 차단: '+(S.dedup?'✅ ON ('+(CFG.DEDUP_WINDOW/1000)+'초)':'⛔ OFF'));
   lines.push('번역 캐시: '+trCache.size+'건');
@@ -1249,6 +1516,7 @@ async function startRec(){
   if(!stt.start($('srcLang').value)) return;
   S.recording=true;
   $('micBtn').classList.add('rec'); $('micBtn').textContent='⏹ 듣는 중… (탭하여 정지)';
+  updateSubMic();
   if(S.wake) reqWake();
   updateDiag();
 }
@@ -1257,7 +1525,8 @@ function stopRec(){
   stt.stop();
   clearInterim();
   $('micBtn').classList.remove('rec'); $('micBtn').textContent='🎤 말하기 시작';
-  setStatus('off'); if(!S.wake) relWake();
+  updateSubMic();
+  setStatus('off'); if(!S.wake && !subOn) relWake();
   updateDiag();
 }
 
@@ -1444,28 +1713,50 @@ $('swapBtn').onclick=()=>{
   [...dst.options].forEach(o=>{ if(o.value===srcT) dst.value=o.value; });
   lastFlushed=''; lastFlushTime=0; contextBuf=[]; clearInterim();
   stt.setLang(src.value);
+  subLog.length=0; subLangLabels(); renderSub();
   toast('언어 방향 변경: '+langName(src.value)+' → '+langName(dst.value));
 };
 $('srcLang').onchange=()=>{
   lastFlushed=''; contextBuf=[]; clearInterim();
   stt.setLang($('srcLang').value);
+  subLangLabels(); renderSub();
 };
-$('dstLang').onchange=()=>{ trCache.clear(); contextBuf=[]; };
+$('dstLang').onchange=()=>{ trCache.clear(); contextBuf=[]; subLangLabels(); };
 
 $('clearBtn').onclick=()=>{
   if(confirm('대화 기록을 모두 지울까요?')){
     history=[]; saveLocal(); lastFlushed=''; lastFlushTime=0; contextBuf=[]; trCache.clear();
-    clearInterim();
+    clearInterim(); subLog.length=0; renderSub();
     log.innerHTML='<div class="empty" id="emptyMsg">🎙️ 말하기 버튼을 눌러 시작하세요.</div>'; updateCount();
   }
 };
 
 $('previewBtn').onclick=()=>{ S.preview=!S.preview; syncUI(); saveSettings(); toast(S.preview?'👁 미리보기 ON':'미리보기 OFF'); };
-$('ttsBtn').onclick=()=>{ S.tts=!S.tts; syncUI(); saveSettings(); };
+$('ttsBtn').onclick=()=>{
+  S.tts=!S.tts;
+  if(!S.tts){ clearTTS(); if(stt.running) stt.mute(false); toast('📄 자막 모드 — 마이크가 끊기지 않습니다'); }
+  else toast('🔊 음성출력 ON');
+  syncUI(); saveSettings(); updateDiag();
+};
 $('wakeBtn').onclick=()=>{ S.wake=!S.wake; S.wake?reqWake():relWake(); syncUI(); saveSettings(); };
 $('bigBtn').onclick=()=>{ S.big=!S.big; S.fs=S.big?24:17; applyFs(); syncUI(); saveSettings(); };
 $('recordBtn').onclick=openRecord;
 $('deployBtn').onclick=()=>{ $('deployModal').classList.add('show'); };
+
+/* --- 자막 화면 --- */
+$('subBtn').onclick=()=>{ openSub(); if(!S.recording) startRec(); };
+$('subClose').onclick=closeSub;
+$('subMic').onclick=()=>{ S.recording?stopRec():startRec(); };
+$('subFlipBtn').onclick=()=>{
+  const p=$('subTopPane'); const on=p.classList.toggle('flip');
+  $('subFlipBtn').classList.toggle('on',on);
+  toast(on?'원문 창을 상대방 쪽으로 뒤집었습니다':'원문 창 방향 복원');
+};
+$('subFontBtn').onclick=()=>{
+  const steps=[17,22,28,34];
+  S.fs=steps[(steps.indexOf(S.fs)+1)%steps.length] || 22;
+  S.big=S.fs>=24; applyFs(); syncUI(); saveSettings();
+};
 
 function openRecord(){
   $('recStat').textContent=`총 ${history.length}건 저장됨 · 자동 로컬 저장 활성`;
@@ -1482,33 +1773,48 @@ $('expTxt').onclick=exportTxt;
 $('settingsBtn').onclick=()=>{ $('settingsModal').classList.add('show'); updateDiag(); };
 $('closeSet').onclick=()=>$('settingsModal').classList.remove('show');
 document.querySelectorAll('.toggle').forEach(t=>{
-  t.onclick=()=>{ const k=t.dataset.s; S[k]=!S[k]; t.classList.toggle('on',S[k]);
+  t.onclick=()=>{
+    const k=t.dataset.s;
+    if(k==='duckOff'){                       // 이어폰 모드 = 되먹임 차단 해제
+      S.duck=!S.duck;
+      if(!S.duck) toast('🎧 이어폰 모드 — 스피커로 쓰면 같은 말이 반복됩니다');
+      else toast('🔇 스피커 모드 — 음성출력 중 마이크가 잠시 꺼집니다');
+      if(!S.duck && stt.running) stt.mute(false);
+    }else{
+      S[k]=!S[k];
+    }
     if(k==='wake') S.wake?reqWake():relWake();
     if(k==='big'){ S.fs=S.big?24:17; applyFs(); }
+    if(k==='tts' && !S.tts){ clearTTS(); if(stt.running) stt.mute(false); toast('📄 자막 모드 — 마이크가 끊기지 않습니다'); }
     if(k==='useProxy'){ trCache.clear(); syncEngineUI(); toast(S.useProxy?'🛡️ 프록시 경유 ON':'프록시 OFF'); }
-    if(k==='duck' && !S.duck) toast('⚠️ 되먹임 차단 OFF — 스피커 사용 시 반복 통역 위험');
     syncUI(); saveSettings(); updateDiag(); };
 });
 $('fsRange').oninput=e=>{ S.fs=+e.target.value; applyFs(); saveSettings(); };
 $('silRange').oninput=e=>{ S.silenceMs=+e.target.value; $('silLbl').textContent=S.silenceMs+'ms'; saveSettings(); };
 $('hardRange').oninput=e=>{ S.hardChars=+e.target.value; $('hardLbl').textContent=S.hardChars+'자'; saveSettings(); };
+$('rateRange').oninput=e=>{ S.ttsRate=+e.target.value; $('rateLbl').textContent=S.ttsRate.toFixed(2)+'×'; saveSettings(); };
 
 function applyFs(){ document.documentElement.style.setProperty('--fs',S.fs+'px'); $('fsRange').value=S.fs; }
 function syncUI(){
-  document.querySelectorAll('.toggle').forEach(t=>t.classList.toggle('on',!!S[t.dataset.s]));
+  document.querySelectorAll('.toggle').forEach(t=>{
+    const k=t.dataset.s;
+    t.classList.toggle('on', k==='duckOff' ? !S.duck : !!S[k]);
+  });
   $('previewBtn').classList.toggle('active',S.preview);
   $('ttsBtn').classList.toggle('active',S.tts);
+  $('ttsBtn').textContent = S.tts ? '🔊 음성출력' : '📄 자막모드';
   $('wakeBtn').classList.toggle('active',S.wake);
   $('bigBtn').classList.toggle('active',S.big);
   $('silRange').value=S.silenceMs; $('silLbl').textContent=S.silenceMs+'ms';
   $('hardRange').value=S.hardChars; $('hardLbl').textContent=S.hardChars+'자';
+  $('rateRange').value=S.ttsRate;  $('rateLbl').textContent=S.ttsRate.toFixed(2)+'×';
   applyFs();
   $('glossaryCount').textContent=`등록 용어 ${TERMS.length}개 (한/영/체코 3방향)`;
   syncEngineUI();
 }
 function saveSettings(){ try{localStorage.setItem('interp_set',JSON.stringify({
   tts:S.tts,wake:S.wake,big:S.big,glossary:S.glossary,glossaryHint:S.glossaryHint,
-  dedup:S.dedup,duck:S.duck,preview:S.preview,fs:S.fs,
+  dedup:S.dedup,duck:S.duck,ttsGap:S.ttsGap,ttsRate:S.ttsRate,preview:S.preview,fs:S.fs,
   silenceMs:S.silenceMs,hardChars:S.hardChars,
   engine:S.engine,deeplKey:S.deeplKey,googleKey:S.googleKey,
   proxyUrl:S.proxyUrl,useProxy:S.useProxy}));}catch(e){} }
@@ -1563,7 +1869,7 @@ function setupPWA(){
 }
 
 /* ================= 초기화 ================= */
-loadSettings(); syncUI(); loadLocal(); updateCount(); setupPWA(); updateDiag();
+loadSettings(); syncUI(); loadLocal(); updateCount(); setupPWA(); updateDiag(); subLangLabels();
 fixViewportHeight();
 
 if(location.protocol!=='https:' && location.hostname!=='localhost' && location.protocol!=='file:'){
