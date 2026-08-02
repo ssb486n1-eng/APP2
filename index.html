@@ -398,6 +398,8 @@
     안드로이드에서 <code>isFinal</code>/<code>onend</code>는 "말이 끝났다"가 아니라 <b>무음 3~5초 타임아웃</b>입니다. → 이제 세션 종료 시 <b>번역을 확정하지 않고</b> 버퍼를 유지한 채 재시작만 하며, 확정은 무음 타이머·문장부호·최대 길이로만 판단합니다.<br><br>
     <b>원인 ③ TTS 되먹임 루프</b><br>
     번역 음성이 스피커 → 마이크로 재입력되어 재인식·재번역되었습니다. → 음성 출력 중 마이크를 자동 차단합니다.<br><br>
+    <b>원인 ⑥ 인식 리비전으로 인한 반복 재발</b><br>
+    인식기는 도중에 <b>띄어쓰기·어절을 수정(리비전)</b>해 전체 문장을 다시 보냅니다 (예: "책이야 이" → "책이야이"). 단어 단위 겹침 비교는 여기서 실패해 문장이 통째로 이어붙었습니다. → 공백·문장부호를 제거한 <b>정규화 비교로 "대체/델타"를 구분</b>하고, 자막은 확정 전까지 수정하며 유지되다가 <b>실제 침묵에서만 한 번</b> 확정합니다. 확정 즉시 인식 세션을 리셋해 확정 문장의 재전달을 차단합니다.<br><br>
     <b>원인 ⑤ 누적형 인식 결과 (같은 말 4~6회 반복의 진짜 원인)</b><br>
     안드로이드는 <code>results[0]="나는"</code>, <code>results[1]="나는 오늘"</code>, <code>results[2]="나는 오늘 공룡"</code> 처럼 <b>매번 전체 문장을 다시</b> 담아 보냅니다. 인덱스 기준으로 새 결과만 이어붙이면 계단식으로 중복됩니다. → 이제 인덱스가 아니라 <b>단어 겹침(overlap) 병합</b>으로 처리하며, 세션 간 재전달 제거와 반복 블록 축약 안전망을 함께 적용합니다.<br><br>
     <b>원인 ④ 좀비 세션</b><br>
@@ -848,6 +850,47 @@ function stripLeadingOverlap(tail, inc){
 /* 최종 안전망: 연속 반복 블록 축약
    "A B C A B C A B C" → "A B C"
    오탐을 줄이려고 블록 길이별로 최소 반복 횟수를 다르게 둠 */
+/* =========================================================================
+   ★★ 리비전 허용 스냅샷 병합 (반복 재발의 진짜 원인 해결) ★★
+
+   안드로이드 인식기는 인식 도중 이미 보낸 부분의 띄어쓰기·어절을
+   수정(리비전)해서 전체 문장을 다시 보냅니다.
+     스냅샷 N   : "…두키두키라는 책이야 이 책은"
+     스냅샷 N+1 : "…두키두키라는 책이야이 책은"   <- 띄어쓰기만 바뀜
+   단어 단위 겹침 비교는 여기서 실패해 전체 문장이 통째로 이어붙습니다.
+   -> 공백·문장부호를 제거한 정규화 문자열로 "대체 / 델타"를 구분합니다.
+   ========================================================================= */
+function normJoin(w){
+  const s=Array.isArray(w)?w.join(' '):String(w||'');
+  return s.toLowerCase().replace(/[\s.,!?;:'"\u201c\u201d\u2018\u2019\u00b7\u2026]+/g,'');
+}
+function commonPrefixLen(a,b){
+  const n=Math.min(a.length,b.length); let i=0;
+  while(i<n && a[i]===b[i]) i++;
+  return i;
+}
+/* 스냅샷 병합: inc 가 base 를 다시 담은 것이면 "대체", 새 내용이면 "겹침 병합" */
+function mergeSnap(base, inc){
+  if(!base.length) return inc.slice();
+  if(!inc.length)  return base.slice();
+  const nb=normJoin(base), ni=normJoin(inc);
+  if(ni.indexOf(nb)===0) return inc.slice();     // 누적형: inc 가 전체 대체 (띄어쓰기 리비전 흡수)
+  if(nb.indexOf(ni)===0) return base.slice();    // inc 는 과거 스냅샷
+  const lcp=commonPrefixLen(nb,ni);
+  if(lcp>=4 && lcp>=Math.min(nb.length,ni.length)*0.7){
+    return (ni.length>=nb.length?inc:base).slice();   // 중간 리비전 -> 더 긴 스냅샷 채택
+  }
+  return mergeWords(base,inc);                   // 순수 델타(데스크톱) -> 단어 겹침 병합
+}
+/* 세션 경계를 넘어 이어지는 발화 결합 */
+function combineUtter(carry, sess){
+  if(!carry.length) return sess.slice();
+  if(!sess.length)  return carry.slice();
+  const nc=normJoin(carry), ns=normJoin(sess);
+  if(ns.indexOf(nc)===0) return sess.slice();    // 새 세션이 이전 내용까지 다시 인식한 경우
+  return carry.concat(stripLeadingOverlap(carry, sess));
+}
+
 function collapseRepeats(w){
   let out=w.slice();
   for(let n=Math.floor(out.length/2); n>=1; n--){
@@ -1112,9 +1155,9 @@ class ContinuousSTT {
     this.running=false; this.muted=false; this.alive=false; this.restarting=false;
     this.rec=null; this.lang='ko-KR';
     this.pending=''; this.interim='';
-    this.pendW=[];              // ★ 세션이 끊겨도 살아남는 미확정 단어 버퍼
-    this.sessWords=[];          // 현재 세션의 병합 전문 (세션마다 리셋)
-    this.tail=[];               // 직전 flush 의 꼬리 (세션 간 중복 제거용)
+    this.carryW=[];             // ★ 이전 세션에서 이어온 미확정 발화 (세션이 끊겨도 보존)
+    this.sessW=[];              // 현재 세션의 최신 스냅샷 (리비전 시 대체됨)
+    this.tail=[];               // 직전 확정 문장의 꼬리 (재전달 중복 제거용)
     this.lastEventAt=0; this.backoff=CFG.RESTART_DELAY_MS;
     this.flushTimer=null;
     setInterval(()=>this._watch(), CFG.WATCHDOG_MS);
@@ -1125,7 +1168,7 @@ class ContinuousSTT {
     this.lang=lang; this.running=true; this.muted=false;
     this.backoff=CFG.RESTART_DELAY_MS;
     this.pending=''; this.interim=''; this.tail=[];
-    this.pendW=[]; this.sessWords=[];
+    this.carryW=[]; this.sessW=[];
     this._begin();
     return true;
   }
@@ -1143,7 +1186,7 @@ class ContinuousSTT {
     if(this.lang===lang) return;
     this.lang=lang;
     this.pending=''; this.interim=''; this.tail=[];
-    this.pendW=[]; this.sessWords=[];
+    this.carryW=[]; this.sessW=[];
     if(this.running && this.rec){ try{ this.rec.abort(); }catch(e){} }
   }
 
@@ -1163,10 +1206,8 @@ class ContinuousSTT {
     rec.interimResults=true;
     rec.maxAlternatives=1;
 
-    // ★ 세션 전문만 리셋한다. pendW(미확정 버퍼)는 절대 지우지 않는다.
-    //   여기서 pendW 를 지우면 확정 타이머가 터지기 전에 세션이 재시작될 때
-    //   방금 들은 문장이 통째로 사라진다 (= 통역을 못 하고 지나가는 증상).
-    this.sessWords=[];
+    // ★ 세션 스냅샷만 리셋. carryW(이어온 발화)는 절대 지우지 않는다.
+    this.sessW=[];
     this.lastEventAt=Date.now();
 
     rec.onstart=()=>{
@@ -1187,9 +1228,11 @@ class ContinuousSTT {
       this.h.onState('인식 오류: '+t, true);
     };
 
-    // ★★ 여기서 절대 flush 하지 않는다 ★★
+    // ★★ 여기서 절대 flush 하지 않는다. 발화는 carryW 로 접어 보존한다 ★★
     rec.onend=()=>{
       this.alive=false;
+      this.carryW=combineUtter(this.carryW, this.sessW);
+      this.sessW=[];
       if(this.running && !this.muted) this._restart();
       else this.h.onState('idle');
     };
@@ -1211,36 +1254,33 @@ class ContinuousSTT {
   _onResult(e){
     this.lastEventAt=Date.now();
 
-    // ★ 인덱스가 아니라 "단어 겹침"으로 병합한다.
-    //   안드로이드는 results[i] 마다 전체 문장을 다시 담아 보내므로
-    //   인덱스로 골라 이어붙이면 계단식 중복이 발생한다.
+    // ★ 스냅샷은 "이어붙이기"가 아니라 "대체"가 기본이다.
+    //   인식기가 띄어쓰기·어절을 수정(리비전)해 전체 문장을 다시 보내므로
+    //   정규화 비교(mergeSnap)로 대체/델타를 구분한다.
     let fin=[], itm=[];
     for(let i=0;i<e.results.length;i++){
       const w=words(e.results[i][0].transcript);
-      if(e.results[i].isFinal) fin=mergeWords(fin,w);
-      else                     itm=mergeWords(itm,w);
+      if(e.results[i].isFinal) fin=mergeSnap(fin,w);
+      else                     itm=mergeSnap(itm,w);
     }
 
-    // mergeWords 는 항상 base 를 접두사로 보존하므로 sessWords 는 단조 증가한다
-    const prevLen=this.sessWords.length;
-    this.sessWords=mergeWords(this.sessWords, fin);
-    let delta=this.sessWords.slice(prevLen);
+    this.sessW=mergeSnap(this.sessW, fin);
 
-    // 세션이 막 시작됐고 대기 버퍼가 비어 있으면, 직전에 확정한 문장이
-    // 통째로 재전달된 것일 수 있으므로 겹치는 앞부분을 제거
-    if(prevLen===0 && !this.pendW.length && this.tail.length){
-      delta=stripLeadingOverlap(this.tail, delta);
-    }
-    if(delta.length) this.pendW=mergeWords(this.pendW, delta);
+    // 현재 발화 전체 = 이전 세션에서 이어온 부분 + 현재 세션 스냅샷
+    let utter=combineUtter(this.carryW, this.sessW);
+    if(this.tail.length) utter=stripLeadingOverlap(this.tail, utter);
 
-    this.pending=this.pendW.join(' ');
-    this.interim=mergeWords(this.sessWords, itm).slice(this.sessWords.length).join(' ');
+    this.pending=utter.join(' ');
+    const liveW=mergeSnap(utter, itm);
+    this.interim=liveW.join(' ').slice(this.pending.length).trim();
 
     this.h.onPartial(this.pending, this.interim);
 
-    if(this.pendW.length){
-      if(/[.!?。？！…]["'）)\]]?$/.test(this.pending) || this.pending.length>=S.hardChars){
-        this._flush();
+    if(utter.length){
+      if(this.pending.length>=S.hardChars){
+        this._flush();                                     // 안전밸브 (장문 독백)
+      }else if(/[.!?。？！…]["'）)\]]?$/.test(this.pending) && !this.interim){
+        this._flush();                                     // 문장부호 종결 + 인식 휴지
       }else{
         this._arm();
       }
@@ -1249,18 +1289,37 @@ class ContinuousSTT {
 
   _arm(){
     clearTimeout(this.flushTimer);
-    this.flushTimer=setTimeout(()=>this._flush(), S.silenceMs);
+    this.flushTimer=setTimeout(()=>{
+      // ★ 아직 인식 중(interim 진행형)이고 이벤트가 최근이면 확정을 미룬다.
+      //   "말하는 도중 확정"을 막는 핵심 조건.
+      const idle=Date.now()-this.lastEventAt >= S.silenceMs-80;
+      if(this.interim && !idle){ this._arm(); return; }
+      this._flush();
+    }, S.silenceMs);
   }
 
   _flush(){
     clearTimeout(this.flushTimer);
-    if(!this.pendW.length) return;
-    const text=collapseRepeats(this.pendW).join(' ').trim();   // 최종 안전망
-    this.tail=this.pendW.slice(-24);                           // 다음 세션 중복 제거용
-    this.pendW=[];
+    let w=combineUtter(this.carryW, this.sessW);
+    if(this.tail.length) w=stripLeadingOverlap(this.tail, w);
+
+    // 인식기가 마지막 조각을 final 로 확정하지 못하고 멈춘 경우 임시 결과 구제
+    if(this.interim && Date.now()-this.lastEventAt >= S.silenceMs-80){
+      w=mergeSnap(w, words(this.interim));
+    }
+    if(!w.length){ this.pending=''; this.interim=''; return; }
+
+    const text=collapseRepeats(w).join(' ').trim();            // 최종 안전망
+    this.carryW=[]; this.sessW=[];
     this.pending=''; this.interim='';
+    if(text) this.tail=w.slice(-24);
     this.h.onPartial('','');
     if(text) this.h.onSegment(text);
+
+    // ★ 확정 즉시 인식 세션을 리셋한다.
+    //   누적형 인식기가 확정한 문장을 다음 스냅샷에 또 실어 보내는 것을
+    //   원천 차단 (확정 시점 = 침묵 구간이므로 유실 없음)
+    if(this.alive && this.rec){ try{ this.rec.abort(); }catch(e){} }
   }
 
   _watch(){
@@ -1268,7 +1327,7 @@ class ContinuousSTT {
     const now=Date.now();
 
     // ★ 어떤 경로로든 확정되지 못하고 남은 버퍼를 회수 (유실 최종 안전망)
-    if(this.pendW.length && now-this.lastEventAt > Math.max(2500, S.silenceMs*2)){
+    if((this.carryW.length||this.sessW.length) && now-this.lastEventAt > Math.max(2500, S.silenceMs*2)){
       this._flush();
     }
 
