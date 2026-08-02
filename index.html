@@ -66,6 +66,7 @@
   .msg .gtag{display:inline-block;font-size:10px;color:var(--warn);margin-left:6px;}
   .msg .etag{display:inline-block;font-size:9px;color:var(--sub);margin-left:6px;
     border:1px solid var(--line);border-radius:10px;padding:1px 5px;}
+  .msg .pron{font-size:calc(var(--fs,17px) - 2px);color:#e3b341;margin-top:4px;line-height:1.4;}
   .interim{opacity:.62;border-style:dashed;}
   .interim .orig{font-style:italic;}
   .speak{background:none;border:none;color:var(--sub);font-size:14px;cursor:pointer;}
@@ -74,6 +75,12 @@
 
   footer{background:var(--panel);border-top:1px solid var(--line);padding:8px 12px;flex:none;
     padding-bottom:calc(8px + env(safe-area-inset-bottom));}
+  .typebar{display:none;gap:8px;margin-bottom:8px;}
+  .typebar.show{display:flex;}
+  .typebar input{flex:1;min-width:0;background:var(--bg);color:var(--txt);
+    border:1px solid var(--line);border-radius:12px;padding:12px;font-size:15px;}
+  .typebar button{width:56px;border:none;border-radius:12px;background:var(--accent);
+    color:#fff;font-size:19px;font-weight:700;}
   .row{display:flex;gap:8px;align-items:center;}
   .mic{flex:1;height:54px;border:none;border-radius:14px;font-size:16px;font-weight:700;
     color:#fff;background:var(--accent2);transition:.15s;}
@@ -126,6 +133,8 @@
   #subtitle .pane.top .done{color:#e6edf3;}
   #subtitle .pane.bot .done{color:#7fb2ff;}
   #subtitle .pane.flip{transform:rotate(180deg);}
+  #subtitle .pronline{flex:none;font-size:calc(var(--fs,17px) * 1.0);color:#e3b341;
+    margin-top:8px;white-space:pre-wrap;word-break:break-word;}
   #subbar{flex:none;display:flex;gap:6px;padding:8px 12px;background:var(--panel);
     border-top:1px solid var(--line);}
   #subbar button{flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--txt);
@@ -268,9 +277,14 @@
 </div>
 
 <footer>
+  <div class="typebar" id="typebar">
+    <input id="typeIn" placeholder="번역할 문장을 입력… (Enter로 전송)" autocomplete="off">
+    <button id="typeSend">➤</button>
+  </div>
   <div class="row">
     <button class="iconbtn" id="settingsBtn" title="설정">⚙️</button>
     <button class="mic" id="micBtn">🎤 말하기 시작</button>
+    <button class="iconbtn" id="typeBtn" title="타이핑 번역">⌨️</button>
     <button class="iconbtn" id="clearBtn" title="지우기">🗑️</button>
   </div>
   <div class="toolrow">
@@ -307,6 +321,7 @@
     <h3>🧩 기타 인식 옵션</h3>
     <div class="kv"><span>👁 실시간 미리보기 번역<small>말하는 도중 임시 번역 표시 (API 사용량 증가)</small></span><button class="toggle" data-s="preview"></button></div>
     <div class="kv"><span>🚫 중복 문장 자동 차단</span><button class="toggle" data-s="dedup"></button></div>
+    <div class="kv"><span>🗣 한글 발음 자막<small>영어·체코어 통역문 아래에 한글 발음 표기. 체코어는 정확도가 높고 영어는 근사치입니다</small></span><button class="toggle" data-s="pron"></button></div>
     <div class="note info">이 앱은 안드로이드가 3~5초마다 인식 세션을 강제 종료해도 <b>버퍼를 유지한 채 즉시 세션을 재시작</b>합니다. 따라서 세션 종료는 문장의 끝이 아니며, 문장 확정은 위 무음 시간·문장부호·최대 길이로만 판단합니다.</div>
 
     <h3>🌐 번역 엔진 (기술 통역 정확도 향상)</h3>
@@ -601,6 +616,7 @@ function json(obj, cors, status = 200) {
   <div class="pane bot" id="subBotPane">
     <div class="plbl"><span id="subBotLbl">통역</span><span id="subBotHint"></span></div>
     <div class="body"><div class="done" id="subBotDone"></div><div class="live" id="subBotLive"></div></div>
+    <div class="pronline" id="subBotPron"></div>
   </div>
   <div id="subbar">
     <button id="subMic" class="go">🎤 시작</button>
@@ -647,7 +663,7 @@ const CFG = {
 /* ================= 상태 ================= */
 const S = {
   tts:true, wake:false, big:false, glossary:true, glossaryHint:true,
-  dedup:true, duck:true, ttsGap:true, ttsRate:1.15, preview:true,
+  dedup:true, duck:true, ttsGap:true, ttsRate:1.15, preview:true, pron:true,
   fs:17, recording:false,
   engine:'free', deeplKey:'', googleKey:'',
   proxyUrl:'', useProxy:false,
@@ -1341,6 +1357,216 @@ class ContinuousSTT {
 }
 
 /* =========================================================================
+   🗣 한글 발음 표기 엔진 (영어·체코어 → 한글)
+   - 체코어: 철자가 음소적이라 규칙 변환이 정확한 편
+   - 영어: 상용어 사전(170+) 우선, 미등재 단어는 철자 규칙 근사
+   ========================================================================= */
+function hSyll(cho,jung,jong){ return String.fromCharCode(0xAC00+(cho*21+jung)*28+(jong||0)); }
+
+const PH_V={a:0,ae:1,eo:4,e:5,o:8,u:13,eu:18,i:20};
+const Y_MAP={0:2,1:3,4:6,5:7,8:12,13:17,18:17,20:20};
+const W_MAP={0:9,1:10,4:14,5:15,8:14,13:13,18:13,20:16};
+const PH_C={
+  g:{cho:0,jong:1,stop:1},  k:{cho:15,jong:1,stop:1},
+  n:{cho:2,jong:4},         d:{cho:3,jong:0,stop:1},  t:{cho:16,jong:19,stop:1},
+  r:{cho:5,jong:0},         l:{cho:5,jong:8,ll:1},
+  m:{cho:6,jong:16},        b:{cho:7,jong:17,stop:1}, p:{cho:17,jong:17,stop:1},
+  v:{cho:7,jong:0},         f:{cho:17,jong:0},
+  s:{cho:9,jong:0},         th:{cho:9,jong:0},        z:{cho:12,jong:0},
+  j:{cho:12,jong:0,defV:20},zh:{cho:12,jong:0,defV:13},
+  ch:{cho:14,jong:0,defV:20}, sh:{cho:9,jong:0,pal:1,defV:20},
+  h:{cho:18,jong:0},        ng:{}
+};
+
+function hangulFromPh(ph, allowStopCoda){
+  const toks=ph.map(p=>PH_V[p]!==undefined?{V:p}:(p==='y'||p==='w')?{G:p}:{C:p});
+  const syl=[];
+  const last=()=>syl.length?syl[syl.length-1]:null;
+  const isV=k=>toks[k]&&toks[k].V!==undefined;
+  const isG=k=>toks[k]&&toks[k].G!==undefined;
+  const isC=k=>toks[k]&&toks[k].C!==undefined;
+  const vStart=k=>isV(k)||(isG(k)&&isV(k+1));
+  let i=0;
+  while(i<toks.length){
+    if(isC(i)&&toks[i].C==='ng'){                     // ng 는 항상 받침 ㅇ
+      const p=last();
+      if(p&&!p.jong) p.jong=21; else syl.push({cho:11,jung:18,jong:21});
+      i++; continue;
+    }
+    let cho=11,g=null,def=null;
+    if(isC(i)){
+      def=PH_C[toks[i].C]||{cho:11,jong:0};
+      if(vStart(i+1)){ cho=def.cho; if(def.pal) g='y'; i++; }
+      else{
+        const p=last();
+        const nxt=isC(i+1)?toks[i+1].C:null;
+        const beforeLiquid=def.stop&&(nxt==='r'||nxt==='l');   // 파열음+유음 → 브라/프리
+        if(def.jong&&p&&!p.jong&&(allowStopCoda||!def.stop)&&!beforeLiquid){
+          p.jong=def.jong;                                     // 받침 부착 (펌→펌프)
+        }else{
+          syl.push({cho:def.cho,jung:def.defV!==undefined?def.defV:18,jong:0}); // 단독음절 (스/트/치)
+        }
+        i++; continue;
+      }
+    }
+    if(isG(i)){ g=toks[i].G; i++; }
+    if(isV(i)){
+      let j=PH_V[toks[i].V];
+      if(g==='y'&&Y_MAP[j]!==undefined) j=Y_MAP[j];
+      if(g==='w'&&W_MAP[j]!==undefined) j=W_MAP[j];
+      if(def&&def.ll){ const p2=last(); if(p2&&!p2.jong) p2.jong=8; }   // 모음 사이 l → ㄹㄹ (헬로)
+      syl.push({cho,jung:j,jong:0});
+      i++; continue;
+    }
+    if(g){ syl.push({cho:11,jung:g==='y'?20:13,jong:0}); continue; }
+    i++;
+  }
+  return syl.map(s=>hSyll(s.cho,s.jung,s.jong)).join('');
+}
+
+/* ---------- 체코어 규칙 (음소적 철자 → 정확도 높음) ---------- */
+const CS_RULES=[
+  ['ch',['h']],['ou',['o','u']],['au',['a','u']],
+  ['ě',['y','e']],['ř',['r','zh']],['č',['ch']],['š',['sh']],['ž',['zh']],
+  ['ď',['d','y']],['ť',['t','y']],['ň',['n','y']],
+  ['á',['a']],['é',['e']],['í',['i']],['ó',['o']],['ú',['u']],['ů',['u']],['ý',['i']],
+  ['qu',['k','v']],['x',['k','s']],
+  ['a',['a']],['e',['e']],['i',['i']],['y',['i']],['o',['o']],['u',['u']],
+  ['b',['b']],['c',['ch']],['d',['d']],['f',['f']],['g',['g']],['h',['h']],
+  ['j',['y']],['k',['k']],['l',['l']],['m',['m']],['n',['n']],['p',['p']],
+  ['r',['r']],['s',['s']],['t',['t']],['v',['v']],['w',['v']],['z',['z']]
+];
+function csG2P(w){
+  const out=[]; let i=0;
+  outer: while(i<w.length){
+    for(const [pat,ph] of CS_RULES){
+      if(w.startsWith(pat,i)){ out.push(...ph); i+=pat.length; continue outer; }
+    }
+    i++;
+  }
+  return out;
+}
+
+/* ---------- 영어 규칙 (근사) ---------- */
+const EN_RULES=[
+  ['ssion',['sh','eo','n']],['tion',['sh','eo','n']],['sion',['j','eo','n']],
+  ['cial',['sh','eo','l']],['tial',['sh','eo','l']],
+  ['ssure',['sh','eo']],['ture',['ch','eo']],['sure',['zh','eo']],
+  ['ough',['u']],['augh',['o']],['eigh',['e','i']],['igh',['a','i']],
+  ['tch',['ch']],['dge',['j']],
+  ['kn',['n'],1],['wr',['r'],1],['wh',['w']],['qu',['k','w']],['ck',['k']],['ph',['f']],['gh',[]],
+  ['sh',['sh']],['th',['th']],['ch',['ch']],['nk',['ng','k']],['ng',['ng']],
+  ['ee',['i']],['ea',['i']],['oo',['u']],['ou',['a','u']],['ow',['o','u']],
+  ['ai',['e','i']],['ay',['e','i']],['oi',['o','i']],['oy',['o','i']],
+  ['au',['o']],['aw',['o']],['ew',['y','u']],['ue',['u']],['ui',['u']],['ie',['i']],['oa',['o','u']],
+  ['ll',['l'],2],   // 어말 ll → ㄹ (bell→벨), 어중 ll 은 자동 ㄹㄹ
+  ['ss',['s']],['tt',['t']],['pp',['p']],['mm',['m']],['nn',['n']],['ff',['f']],
+  ['rr',['r']],['dd',['d']],['bb',['b']],['gg',['g']],['cc',['k']],['zz',['j']]
+];
+const EN_SINGLE={a:['ae'],e:['e'],i:['i'],o:['o'],u:['eo'],
+  b:['b'],d:['d'],f:['f'],h:['h'],j:['j'],k:['k'],l:['l'],m:['m'],n:['n'],
+  p:['p'],r:['r'],s:['s'],t:['t'],v:['v'],w:['w'],z:['z'],q:['k'],
+  A:['e','i'],E:['i'],I:['a','i'],O:['o','u'],U:['y','u'],L:['eu','l']};
+function enG2P(w){
+  w=w.replace(/[^a-z]/g,'');
+  w=w.replace(/([bcdfghjklmnpqrstvwxz])le$/,'$1L');                       // apple→appL
+  w=w.replace(/([aeiou])([bcdfghjklmnpqrstvz])e$/,
+    (m,v,c)=>(({a:'A',e:'E',i:'I',o:'O',u:'U'})[v])+c);                   // make→mAk (매직 e)
+  const out=[]; let i=0;
+  outer: while(i<w.length){
+    // 모음+r+(자음|끝) → r 탈락 장모음 (car→카, work→워…)
+    if('aeiou'.includes(w[i]) && w[i+1]==='r' && (i+2>=w.length || !'aeiouy'.includes(w[i+2]))){
+      out.push({a:'a',o:'o',e:'eo',i:'eo',u:'eo'}[w[i]]); i+=2; continue;
+    }
+    for(const [pat,ph,flag] of EN_RULES){
+      if(flag===1 && i!==0) continue;
+      if(flag===2 && i+pat.length!==w.length) continue;
+      if(w.startsWith(pat,i)){ out.push(...ph); i+=pat.length; continue outer; }
+    }
+    const c=w[i];
+    if(c==='c'){ out.push('eiy'.includes(w[i+1])?'s':'k'); i++; continue; }
+    if(c==='g'){ out.push('eiy'.includes(w[i+1])?'j':'g'); i++; continue; }
+    if(c==='y'){ out.push(i===0?'y':'i'); i++; continue; }
+    if(EN_SINGLE[c]) out.push(...EN_SINGLE[c]);
+    i++;
+  }
+  return out;
+}
+
+/* ---------- 영어 상용어 사전 (불규칙 발음 보정) ---------- */
+const EN_DICT={
+i:'아이',you:'유',he:'히',she:'쉬',we:'위',they:'데이',it:'잇',me:'미',us:'어스',them:'뎀',
+my:'마이',your:'유어',our:'아워',his:'히즈',her:'허',their:'데어',its:'이츠',
+the:'더',a:'어',an:'언',and:'앤드',or:'오어',but:'벗',so:'소',if:'이프',
+is:'이즈',are:'아',was:'워즈',were:'워',be:'비',been:'빈',am:'앰',being:'비잉',
+do:'두',does:'더즈',did:'디드',done:'던',have:'해브',has:'해즈',had:'해드',
+will:'윌',would:'우드',can:'캔',could:'쿠드',should:'슈드',shall:'섈',must:'머스트',may:'메이',might:'마이트',
+not:'낫',no:'노',yes:'예스',ok:'오케이',okay:'오케이',
+this:'디스',that:'댓',these:'디즈',those:'도즈',
+what:'왓',when:'웬',where:'웨어',who:'후',why:'와이',how:'하우',which:'위치',
+here:'히어',there:'데어',now:'나우',then:'덴',
+to:'투',of:'오브',in:'인',on:'온',at:'앳',by:'바이',for:'포',from:'프롬',with:'위드',
+about:'어바웃',into:'인투',over:'오버',under:'언더',between:'비트윈',through:'스루',
+please:'플리즈',thank:'생크',thanks:'생스',sorry:'쏘리',excuse:'익스큐즈',
+hello:'헬로',hi:'하이',bye:'바이',good:'굿',bad:'배드',
+very:'베리',too:'투',also:'올소',only:'온리',just:'저스트',again:'어겐',
+more:'모어',less:'레스',most:'모스트',many:'매니',much:'머치',some:'섬',any:'애니',all:'올',
+one:'원',two:'투',three:'스리',four:'포',five:'파이브',six:'식스',seven:'세븐',eight:'에이트',nine:'나인',ten:'텐',
+first:'퍼스트',second:'세컨드',third:'서드',next:'넥스트',last:'라스트',
+today:'투데이',tomorrow:'투모로',yesterday:'예스터데이',
+time:'타임',day:'데이',week:'위크',month:'먼스',year:'이어',hour:'아워',minute:'미닛',
+morning:'모닝',afternoon:'애프터눈',evening:'이브닝',night:'나이트',
+meeting:'미팅',schedule:'스케줄',plan:'플랜',work:'워크',project:'프로젝트',
+new:'뉴',old:'올드',high:'하이',low:'로우',big:'빅',small:'스몰',long:'롱',short:'쇼트',
+need:'니드',want:'원트',know:'노우',think:'싱크',see:'시',look:'룩',
+go:'고',come:'컴',make:'메이크',take:'테이크',get:'겟',give:'기브',put:'풋',
+use:'유즈',find:'파인드',tell:'텔',ask:'애스크',say:'세이',said:'세드',
+start:'스타트',stop:'스톱',open:'오픈',close:'클로즈',finish:'피니시',
+check:'체크',test:'테스트',review:'리뷰',approve:'어프루브',approval:'어프루벌',confirm:'컨펌',
+water:'워터',waste:'웨이스트',wastewater:'웨이스트워터',treatment:'트리트먼트',plant:'플랜트',
+nuclear:'뉴클리어',power:'파워',energy:'에너지',
+pump:'펌프',valve:'밸브',pipe:'파이프',piping:'파이핑',tank:'탱크',filter:'필터',
+pressure:'프레셔',temperature:'템퍼러처',level:'레벨',flow:'플로',rate:'레이트',
+sample:'샘플',sampling:'샘플링',monitor:'모니터',monitoring:'모니터링',
+inspection:'인스펙션',maintenance:'메인터넌스',operation:'오퍼레이션',
+design:'디자인',drawing:'드로잉',document:'도큐먼트',specification:'스페시피케이션',
+safety:'세이프티',radiation:'레이디에이션',chemical:'케미컬',acid:'애시드',boric:'보릭',
+steam:'스팀',cooling:'쿨링',supply:'서플라이',discharge:'디스차지',limit:'리밋',
+alarm:'알람',sensor:'센서',control:'컨트롤',panel:'패널',system:'시스템',
+equipment:'이큅먼트',material:'머티리얼',unit:'유닛',building:'빌딩',site:'사이트',area:'에어리어',
+engineer:'엔지니어',manager:'매니저',team:'팀',company:'컴퍼니',
+contract:'컨트랙트',delivery:'딜리버리',quality:'퀄리티',cost:'코스트',price:'프라이스',budget:'버짓',
+problem:'프라블럼',issue:'이슈',question:'퀘스천',answer:'앤서',
+information:'인포메이션',data:'데이터',report:'리포트',result:'리절트',number:'넘버',name:'네임',
+because:'비커즈',before:'비포',after:'애프터',during:'듀링',until:'언틸',
+same:'세임',different:'디퍼런트',important:'임포턴트',possible:'파서블',ready:'레디',
+right:'라이트',wrong:'롱',sure:'슈어',maybe:'메이비',
+book:'북',read:'리드',called:'콜드',call:'콜',characteristics:'캐릭터리스틱스',
+dinosaur:'다이너소어',since:'신스'
+};
+const EN_CONTR={"it's":'잇츠',"that's":'댓츠',"what's":'왓츠',"let's":'레츠',
+"don't":'돈트',"doesn't":'더즌트',"didn't":'디든트',"can't":'캔트',"won't":'원트',
+"wouldn't":'우든트',"couldn't":'쿠든트',"shouldn't":'슈든트',
+"isn't":'이즌트',"aren't":'안트',"wasn't":'워즌트',
+"i'm":'아임',"i'll":'아일',"i've":'아이브',"we're":'위어',"we'll":'위일',"we've":'위브',
+"you're":'유어',"you'll":'유일',"you've":'유브',"they're":'데어',
+"there's":'데어즈',"here's":'히어즈',"he's":'히즈',"she's":'쉬즈'};
+
+function toHangulPron(text,lang){
+  const out=String(text).replace(/[A-Za-z\u00C0-\u024F]+(?:'[A-Za-z]+)?/g, tok=>{
+    const lw=tok.toLowerCase();
+    try{
+      if(lang==='en'){
+        if(EN_CONTR[lw]) return EN_CONTR[lw];
+        return lw.split("'").map(p=>p?(EN_DICT[p]||hangulFromPh(enG2P(p),true)):'').join('');
+      }
+      return hangulFromPh(csG2P(lw),false);   // 체코어: 파열음 받침 금지 (크/트/프)
+    }catch(e){ return tok; }
+  });
+  return out.replace(/\s+/g,' ').trim();
+}
+
+/* =========================================================================
    UI 연결
    ========================================================================= */
 let interimEl=null, previewLastAt=0, previewLastText='';
@@ -1434,7 +1660,16 @@ async function onSegment(text){
 
   tr.className = engine==='none' ? 'tr fail' : 'tr';
   tr.textContent=translated;
-  subEntry.dst=translated; renderSub();
+
+  let pron='';
+  if(S.pron && (to==='en'||to==='cs') && engine!=='none'){
+    try{ pron=toHangulPron(translated,to); }catch(e){ pron=''; }
+    if(pron && pron!==translated){
+      const pr=document.createElement('div'); pr.className='pron';
+      pr.textContent='🗣 '+pron; bubble.appendChild(pr);
+    }
+  }
+  subEntry.dst=translated; subEntry.pron=pron; renderSub();
 
   const lbl=bubble.querySelector('.lbl');
   if(glossaryHit){ const tag=document.createElement('span'); tag.className='gtag'; tag.textContent='📘용어보정'; lbl.appendChild(tag); }
@@ -1448,7 +1683,7 @@ async function onSegment(text){
   enqueueTTS(translated,ttsLang);
 
   history.push({time:new Date().toISOString(),from:langName(from),to:langName(to),
-                src:text,dst:translated,glossary:glossaryHit,engine});
+                src:text,dst:translated,pron,glossary:glossaryHit,engine});
   saveLocal(); updateCount(); log.scrollTop=log.scrollHeight; updateDiag();
 }
 
@@ -1472,6 +1707,8 @@ function renderSub(){
   $('subBotDone').textContent=items.map(x=>x.dst).join('\n');
   $('subTopLive').textContent=subLiveSrc;
   $('subBotLive').textContent=subLiveDst;
+  const lastP=(S.pron&&items.length)?(items[items.length-1].pron||''):'';
+  $('subBotPron').textContent=lastP?('🗣 '+lastP):'';
 }
 function updateSubMic(){
   const b=$('subMic'); if(!b) return;
@@ -1597,6 +1834,7 @@ function loadLocal(){
       h.forEach(m=>{ const b=addBubble('src',m.from,m.src,false);
         const tr=document.createElement('div');tr.className='tr';tr.textContent=m.dst;
         b.appendChild(tr);
+        if(m.pron){const pr=document.createElement('div');pr.className='pron';pr.textContent='🗣 '+m.pron;b.appendChild(pr);}
         if(m.engine){const et=document.createElement('span');et.className='etag';et.textContent=ENGINE_LABEL[m.engine]||m.engine;b.querySelector('.lbl').appendChild(et);}
         log.appendChild(b); });
       updateCount(); log.scrollTop=log.scrollHeight; }
@@ -1802,6 +2040,23 @@ $('bigBtn').onclick=()=>{ S.big=!S.big; S.fs=S.big?24:17; applyFs(); syncUI(); s
 $('recordBtn').onclick=openRecord;
 $('deployBtn').onclick=()=>{ $('deployModal').classList.add('show'); };
 
+/* --- 타이핑 번역 --- */
+$('typeBtn').onclick=()=>{
+  const on=$('typebar').classList.toggle('show');
+  $('typeBtn').style.borderColor=on?'var(--accent)':'';
+  $('typeBtn').style.color=on?'var(--accent)':'';
+  if(on) setTimeout(()=>$('typeIn').focus(),60);
+};
+function sendTyped(){
+  const t=$('typeIn').value.trim(); if(!t) return;
+  $('typeIn').value='';
+  lastFlushed='';                       // 타이핑은 중복 차단 예외
+  onSegment(t);
+  $('typeIn').focus();
+}
+$('typeSend').onclick=sendTyped;
+$('typeIn').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); sendTyped(); } });
+
 /* --- 자막 화면 --- */
 $('subBtn').onclick=()=>{ openSub(); if(!S.recording) startRec(); };
 $('subClose').onclick=closeSub;
@@ -1873,7 +2128,7 @@ function syncUI(){
 }
 function saveSettings(){ try{localStorage.setItem('interp_set',JSON.stringify({
   tts:S.tts,wake:S.wake,big:S.big,glossary:S.glossary,glossaryHint:S.glossaryHint,
-  dedup:S.dedup,duck:S.duck,ttsGap:S.ttsGap,ttsRate:S.ttsRate,preview:S.preview,fs:S.fs,
+  dedup:S.dedup,duck:S.duck,ttsGap:S.ttsGap,ttsRate:S.ttsRate,preview:S.preview,pron:S.pron,fs:S.fs,
   silenceMs:S.silenceMs,hardChars:S.hardChars,
   engine:S.engine,deeplKey:S.deeplKey,googleKey:S.googleKey,
   proxyUrl:S.proxyUrl,useProxy:S.useProxy}));}catch(e){} }
