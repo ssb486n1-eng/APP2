@@ -348,6 +348,10 @@
     <div class="kv"><span>⚡ 문장 단위 즉시 확정<small>침묵을 기다리지 않고 종결어미·문장부호가 보이면 바로 통역. 연속 발화가 끊기지 않고 이어집니다</small></span><button class="toggle" data-s="sentSplit"></button></div>
     <div class="kv"><span>🚫 중복 문장 자동 차단</span><button class="toggle" data-s="dedup"></button></div>
     <div class="kv"><span>🗣 한글 발음 자막<small>영어·체코어 통역문 아래에 한글 발음 표기. 체코어는 정확도가 높고 영어는 근사치입니다</small></span><button class="toggle" data-s="pron"></button></div>
+    <h3>🚑 인식이 아예 안 될 때</h3>
+    <div class="note warn">인식이 전혀 되지 않으면 <b>부가 기능이 마이크를 점유</b>하고 있을 가능성이 큽니다. 아래 버튼으로 녹음·고감도·화자구분을 한 번에 해제하고 인식만 남깁니다. 앱은 8초간 결과가 없으면 <b>자동으로</b> 같은 조치를 취합니다.</div>
+    <button class="exportbtn" id="emergencyBtn" style="text-align:center"><b>🚑 부가 기능 모두 끄고 인식만 살리기</b></button>
+
     <h3>🎧 인식 성능 (누락 개선)</h3>
     <div class="kv"><span>📶 온디바이스 인식 우선<small>네트워크 상태에 따른 "될 때·안 될 때" 편차를 줄입니다. 언어팩이 없으면 자동으로 클라우드로 되돌아갑니다</small></span><button class="toggle" data-s="onDevice"></button></div>
     <div class="kv"><span>📺 미디어 소리 인식 모드<small>스피커·스피커폰·다른 기기 재생음을 들을 때. 에코 제거를 해제해 외부 재생음이 지워지지 않게 합니다</small></span><button class="toggle" data-s="mediaMode"></button></div>
@@ -378,7 +382,7 @@
     <div class="diag" id="feedResult">말하기를 시작하고 고감도 모드를 켠 뒤 실행하세요. 파이프라인을 5초간 무음으로 만들어, 증폭이 인식기에 실제로 전달되는지 확인합니다.</div>
 
     <h3>🎙 원음 녹음</h3>
-    <div class="kv"><span>말하기와 동시에 녹음<small>인식과 별개 스트림으로 녹음합니다. 통역 기록의 각 문장에 시간이 기록되어 나중에 그 지점부터 다시 들을 수 있습니다</small></span><button class="toggle" data-s="record"></button></div>
+    <div class="kv"><span>말하기와 동시에 녹음<small>⚠️ 일부 기기에서 마이크 점유가 겹쳐 인식이 나빠질 수 있어 기본 OFF입니다. 켠 뒤 인식이 안 되면 자동 해제됩니다. 인식과 별개 스트림으로 녹음합니다. 통역 기록의 각 문장에 시간이 기록되어 나중에 그 지점부터 다시 들을 수 있습니다</small></span><button class="toggle" data-s="record"></button></div>
     <div class="diag" id="recAudioStat">녹음본 없음</div>
 
     <h3>🗣 발화자 구분 (근사)</h3>
@@ -754,7 +758,7 @@ const CFG = {
 /* ================= 상태 ================= */
 const S = {
   tts:true, wake:false, big:false, glossary:true, glossaryHint:false,
-  dedup:true, duck:true, duckMode:'soft', bargeIn:true, bargeSens:2.2, record:true,
+  dedup:true, duck:true, duckMode:'soft', bargeIn:true, bargeSens:2.2, record:false,
   liveMode:true, mediaMode:false, autoCorrect:true,
   ttsGap:true, ttsRate:1.15, preview:false, pron:true,
   customMic:false, micGain:1.4, sentSplit:true, ttsWhat:'dst',
@@ -2003,6 +2007,8 @@ class ContinuousSTT {
     this.sessW=[];              // 현재 세션의 최신 스냅샷 (리비전 시 대체됨)
     this.doneNorm='';           // ★ 이번 세션에서 이미 내보낸 부분 (정규화 접두)
     this.baseTail=[];           // ★ 세션 시작 시점의 tail — 세션당 1회만 사용
+    this.gotAny=false;          // 이번 세션에서 결과를 한 번이라도 받았는가
+    this.startedAt=Date.now();  // 인식 시작 시각 (무입력 진단용)
     this.remLen=0;              // 직전 이벤트의 미확정 단어 수 (휴지 분할 기준점)
     this.lastWordAt=Date.now(); // 마지막으로 새 확정 단어가 들어온 시각
     this.tail=[];               // 직전 확정 문장의 꼬리 (재전달 중복 제거용)
@@ -2014,6 +2020,7 @@ class ContinuousSTT {
   start(lang){
     if(!SR){ this.h.onState('음성인식 미지원 (Chrome 사용)', true); return false; }
     this.lang=lang; this.running=true; this.muted=false;
+    this.gotAny=false; this.startedAt=Date.now();
     this.backoff=CFG.RESTART_DELAY_MS;
     this.pending=''; this.interim=''; this.tail=[];
     this.carryW=[]; this.sessW=[]; this.doneNorm=''; this.baseTail=[];
@@ -2078,7 +2085,10 @@ class ContinuousSTT {
       if(t==='not-allowed'||t==='service-not-allowed'){
         this.running=false; this.h.onState('마이크 권한 거부됨', true, 'perm'); return;
       }
-      if(t==='audio-capture'){ this.h.onState('마이크 입력 없음 — 다른 앱이 사용 중인지 확인', true, 'acap'); return; }
+      if(t==='audio-capture'){
+        if(micPipe||mediaRec){ emergencyReleaseAux(true); }               // 캡처 충돌 → 즉시 해제
+        this.h.onState('마이크 입력 없음 — 다른 앱이 사용 중인지 확인', true, 'acap'); return;
+      }
       if(t==='language-not-supported' && S.onDevice){
         S.onDevice=false; saveSettings(); syncUI();
         this.h.onState('온디바이스 언어팩이 없어 클라우드 인식으로 전환', true); return;
@@ -2116,7 +2126,7 @@ class ContinuousSTT {
   }
 
   _onResult(e){
-    this.lastEventAt=Date.now();
+    this.lastEventAt=Date.now(); this.gotAny=true;
 
     // ★ 스냅샷은 "이어붙이기"가 아니라 "대체"가 기본이다.
     //   인식기가 띄어쓰기·어절을 수정(리비전)해 전체 문장을 다시 보내므로
@@ -2158,6 +2168,13 @@ class ContinuousSTT {
     this.interim=liveW.join(' ').slice(this.pending.length).trim();
 
     this.h.onPartial(this.pending, this.interim);
+
+    /* 🎤 텍스트 기반 바지인 — 재생 중인데 에코가 아닌 새 발화가 들어오면 재생 중단.
+       마이크 레벨 감시가 필요 없어 추가 캡처를 열지 않는다. */
+    if(ttsBusy && S.bargeIn && S.duckMode!=='hard'){
+      const live=(this.pending+' '+this.interim).trim();
+      if(words(live).length>=2 && !isEcho(live)) bargeBreak();
+    }
 
     if(rem.length){
       if(this.pending.length>=S.hardChars) this._flush();   // 안전밸브 (구두점 없는 장문)
@@ -2237,6 +2254,13 @@ class ContinuousSTT {
     }
 
     if(this.muted) return;
+
+    /* 🚑 인식은 살아 있는데 8초간 결과가 하나도 없고, 부가 캡처가 열려 있다면
+       그 캡처가 마이크를 방해하고 있을 가능성이 크다 → 자동으로 떼어낸다. */
+    if(this.alive && !this.gotAny && now-this.startedAt>8000 && (micPipe||mediaRec)){
+      emergencyReleaseAux(true);
+    }
+
     if(!this.alive && !this.restarting){ this._begin(); return; }      // 좀비 부활
     if(this.alive && now-this.lastEventAt>CFG.DEAD_AIR_MS){            // 무응답 강제 재기동
       try{ this.rec.abort(); }catch(e){}
@@ -2803,22 +2827,57 @@ async function startRec(){
     }
   }catch(e){}
 
-  if(S.customMic||S.diarize||S.record||(S.bargeIn&&S.tts)){
-    try{ await buildMicPipe(); }
-    catch(e){ toast('마이크 파이프라인 실패('+(e&&e.name||e)+') → 기본 마이크로 진행'); }
-  }
+  /* ★★ 순서가 중요하다 ★★
+     안드로이드는 음성인식기가 마이크를 잡기 전에 다른 캡처(getUserMedia·MediaRecorder)가
+     먼저 점유하고 있으면 인식에 오디오를 제대로 넘기지 못하는 경우가 있다.
+     따라서 인식을 먼저 시작해 살아난 것을 확인한 뒤에 부가 캡처를 연다. */
   refreshVoices();
   lastFlushed=''; lastFlushTime=0; contextBuf=[]; clearInterim();
-  if(S.record){ try{ await startRecording(); }catch(e){ toast('녹음 실패: '+(e&&e.name||e)); } }
   if(!stt.start($('srcLang').value)) return;
-  S.recording=true;
+  openAuxCapture();                     // 인식이 살아난 뒤 비동기로 부가 캡처 개시
+  S.recording=true; auxDisabled=false;
   $('micBtn').classList.add('rec'); $('micBtn').textContent='⏹ 듣는 중… (탭하여 정지)';
   updateSubMic();
   if(S.wake) reqWake();
   updateDiag();
 }
+/* 인식이 실제로 살아난 뒤에만 부가 캡처(파이프라인·녹음)를 연다 */
+let auxTimer=null;
+function openAuxCapture(){
+  clearTimeout(auxTimer);
+  /* ★ 바지인은 '하드 더킹'일 때만 마이크 레벨 감시가 필요하다.
+     소프트/이어폰 모드는 인식이 계속 살아 있으므로 인식 결과로 판정한다
+     → 불필요한 두 번째 캡처를 열지 않아 인식 안정성이 올라간다. */
+  const need=()=>S.customMic||S.diarize||S.record||(S.bargeIn&&S.tts&&S.duckMode==='hard');
+  if(!need()) return;
+  let tries=0;
+  const tick=async()=>{
+    if(!S.recording) return;
+    if(!stt.alive && tries++<12){ auxTimer=setTimeout(tick,250); return; }   // 최대 3초 대기
+    try{ if(need()) await buildMicPipe(); }catch(e){ toast('마이크 파이프라인 실패 → 기본 마이크로 진행'); return; }
+    if(S.record){ try{ await startRecording(); }catch(e){ toast('녹음 실패: '+(e&&e.name||e)); } }
+    updateDiag();
+  };
+  auxTimer=setTimeout(tick,500);        // 인식 세션이 자리잡을 여유
+}
+
+/* 🚑 부가 캡처가 인식을 방해할 때 자동으로 떼어내고 인식만 살린다 */
+let auxDisabled=false;
+function emergencyReleaseAux(auto){
+  if(auxDisabled) return;
+  auxDisabled=true;
+  clearTimeout(auxTimer);
+  stopRecording(); killMicPipe();
+  S.record=false; S.customMic=false; S.diarize=false;
+  saveSettings(); syncUI();
+  toast(auto?'🚑 부가 캡처가 인식을 막고 있어 해제했습니다':'🚑 부가 캡처를 모두 해제했습니다');
+  if(stt.running && stt.rec){ try{ stt.rec.abort(); }catch(e){} }
+  updateDiag();
+}
+
 function stopRec(){
   S.recording=false;
+  clearTimeout(auxTimer);
   stt.stop();
   stopRecording();
   killMicPipe(); pitchSamples=[];
@@ -3139,7 +3198,7 @@ document.querySelectorAll('.toggle').forEach(t=>{
     if(k==='mediaMode'){
       bargeDisarm();
       const rebuild=()=>{ if(!mediaRec) killMicPipe();
-        if(S.customMic||S.diarize||S.record||(S.bargeIn&&S.tts)){
+        if(S.customMic||S.diarize||S.record||(S.bargeIn&&S.tts&&S.duckMode==='hard')){
           buildMicPipe().then(()=>{ if(stt.running&&stt.rec){try{stt.rec.abort();}catch(e){}} }).catch(()=>{});
         } else if(stt.running&&stt.rec){ try{stt.rec.abort();}catch(e){} } };
       rebuild();
@@ -3152,7 +3211,7 @@ document.querySelectorAll('.toggle').forEach(t=>{
       else if(!S.record){ stopRecording(); toast('녹음 중지'); }
     }
     if(k==='bargeIn'){
-      if(S.bargeIn && S.tts && !micPipe) buildMicPipe().catch(()=>{});
+      if(S.bargeIn && S.tts && S.duckMode==='hard' && !micPipe) buildMicPipe().catch(()=>{});
       toast(S.bargeIn?'🎤 바지인 ON — 말하면 재생이 즉시 멈춥니다':'바지인 OFF');
     }
     if(k==='wake') S.wake?reqWake():relWake();
@@ -3203,11 +3262,12 @@ document.querySelectorAll('.toggle').forEach(t=>{
 $('fsRange').oninput=e=>{ S.fs=+e.target.value; applyFs(); saveSettings(); };
 $('silRange').oninput=e=>{ S.silenceMs=+e.target.value; $('silLbl').textContent=S.silenceMs+'ms'; saveSettings(); };
 $('hardRange').oninput=e=>{ S.hardChars=+e.target.value; $('hardLbl').textContent=S.hardChars+'자'; saveSettings(); };
+$('emergencyBtn').onclick=()=>{ auxDisabled=false; emergencyReleaseAux(false); };
 $('termSearch').oninput=e=>searchTerms(e.target.value);
 $('duckMode').onchange=()=>{
   S.duckMode=$('duckMode').value;
   if(S.duckMode!=='hard' && stt.running) stt.mute(false);
-  if(S.duckMode==='soft'&&S.bargeIn&&S.tts&&!micPipe) buildMicPipe().catch(()=>{});
+
   saveSettings(); syncUI(); updateDiag();
   toast({soft:'🎙 계속 듣기 — 재생 중에도 인식합니다',
          hard:'🔇 잠시 끄기 — 되먹임 0, 재생 중 누락 가능',
